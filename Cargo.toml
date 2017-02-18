@@ -1,0 +1,10 @@
+[package]
+name = "rssbot"
+version = "0.1.0"
+authors = ["iovxw <iovxw@outlook.com>"]
+
+[dependencies]
+error-chain = "0.9"
+rss = "0.4"
+atom_syndication = "0.3"
+quick-xml = "*"
