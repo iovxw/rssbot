@@ -79,13 +79,9 @@ impl Database {
             for feed in feeds_list {
                 let feed_id = get_hash(&feed.link);
                 for subscriber in &feed.subscribers {
-                    if subscribers.contains_key(subscriber) {
-                        subscribers.get_mut(subscriber).unwrap().insert(feed_id);
-                    } else {
-                        let mut sets = HashSet::new();
-                        sets.insert(feed_id);
-                        subscribers.insert(subscriber.to_owned(), sets);
-                    }
+                    let subscribed_feeds = subscribers.entry(subscriber.to_owned())
+                        .or_insert_with(|| HashSet::new());
+                    subscribed_feeds.insert(feed_id);
                 }
                 feeds.insert(feed_id, feed);
             }
@@ -109,9 +105,7 @@ impl Database {
         {
             let subscribed_feeds =
                 self.subscribers.entry(subscriber).or_insert_with(|| HashSet::new());
-            if !subscribed_feeds.contains(&feed_id) {
-                subscribed_feeds.insert(feed_id);
-            } else {
+            if !subscribed_feeds.insert(feed_id) {
                 return Err(ErrorKind::AlreadySubscribed.into());
             }
         }
