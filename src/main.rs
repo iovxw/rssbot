@@ -26,6 +26,16 @@ mod errors;
 mod feed;
 mod data;
 
+fn log_error(e: &errors::Error) {
+    warn!("error: {}", e);
+    for e in e.iter().skip(1) {
+        warn!("caused by: {}", e);
+    }
+    if let Some(backtrace) = e.backtrace() {
+        warn!("backtrace: {:?}", backtrace);
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
@@ -56,14 +66,23 @@ fn main() {
     let mut lp = Core::new().unwrap();
     let bot = telebot::RcBot::new(lp.handle(), token).update_interval(200);
 
-    let handle = bot.new_cmd("/reply")
-        .and_then(|(bot, msg)| {
-            let mut text = msg.text.unwrap().clone();
+    let handle = bot.new_cmd("/sub")
+        .and_then(move |(bot, msg)| {
+            let mut text = msg.text.unwrap().to_owned();
             if text.is_empty() {
                 text = "<empty>".into();
             }
 
-            bot.message(msg.chat.id, text).send()
+            match db.subscribe(msg.chat.id, &text, &rss::Channel::default()) {
+                Ok(_) => bot.message(msg.chat.id, text).send(),
+                Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => {
+                    bot.message(msg.chat.id, "已订阅过的 Feed".to_string()).send()
+                }
+                Err(e) => {
+                    log_error(&e);
+                    bot.message(msg.chat.id, format!("error: {}", e)).send()
+                }
+            }
         });
 
     bot.register(handle);

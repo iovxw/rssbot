@@ -4,6 +4,7 @@ use std::path::Path;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 
+use rss;
 use serde_json;
 
 use errors::*;
@@ -28,19 +29,33 @@ pub struct Feed {
 
 #[derive(Debug)]
 pub struct Database {
-    file: File,
     path: String,
     feeds: HashMap<FeedID, Feed>,
     subscribers: HashMap<SubscriberID, Vec<FeedID>>,
 }
 
+fn gen_hash_list(items: &[rss::Item]) -> Vec<u64> {
+    items.iter()
+        .map(|item| {
+            item.guid
+                .as_ref()
+                .map(|guid| get_hash(&guid.value))
+                .unwrap_or_else(|| {
+                    let default = "".to_string();
+                    let title = item.title.as_ref().unwrap_or(&default);
+                    let link = item.link.as_ref().unwrap_or(&default);
+                    let string = String::with_capacity(title.len() + link.len());
+                    get_hash(string)
+                })
+        })
+        .collect()
+}
+
 impl Database {
     pub fn create(path: &str) -> Result<Database> {
-        let f = File::create(path).chain_err(|| ErrorKind::DatabaseOpen(path.to_owned()))?;
         let feeds: HashMap<FeedID, Feed> = HashMap::new();
         let subscribers: HashMap<SubscriberID, Vec<FeedID>> = HashMap::new();
         let mut result = Database {
-            file: f,
             path: path.to_owned(),
             feeds: feeds,
             subscribers: subscribers,
@@ -74,7 +89,6 @@ impl Database {
             }
 
             Ok(Database {
-                file: f,
                 path: path.to_owned(),
                 feeds: feeds,
                 subscribers: subscribers,
@@ -84,8 +98,42 @@ impl Database {
         }
     }
 
+    pub fn subscribe(&mut self,
+                     subscriber: SubscriberID,
+                     rss_link: &str,
+                     rss: &rss::Channel)
+                     -> Result<()> {
+        let feed_id = get_hash(rss_link);
+        {
+            let subscribed_feed = self.subscribers.entry(subscriber).or_insert_with(|| {
+                Vec::new()
+            });
+            if !subscribed_feed.contains(&feed_id) {
+                subscribed_feed.push(feed_id);
+            } else {
+                return Err(ErrorKind::AlreadySubscribed.into());
+            }
+        }
+        {
+            let feed = self.feeds.entry(feed_id).or_insert_with(|| {
+                Feed {
+                    link: rss_link.to_owned(),
+                    title: rss.title.to_owned(),
+                    error_count: 0,
+                    hash_list: gen_hash_list(&rss.items),
+                    subscribers: Vec::new(),
+                }
+            });
+            feed.subscribers.push(subscriber);
+        }
+        self.save()
+    }
+
     fn save(&mut self) -> Result<()> {
-        let feeds_list:Vec<&Feed> = self.feeds.iter().map(|(_id,feed)| feed).collect();
-        serde_json::to_writer(&mut self.file, &feeds_list).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
+        let feeds_list: Vec<&Feed> = self.feeds.iter().map(|(_id, feed)| feed).collect();
+        let mut file =
+            File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;
+        serde_json::to_writer(&mut file, &feeds_list)
+            .chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
     }
 }

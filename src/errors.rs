@@ -2,6 +2,8 @@ error_chain! {
     errors {
         Unknown
 
+        AlreadySubscribed
+
         DatabaseOpen(path: String) {
             description("failed to open database")
             display("failed to open database: '{}'", path)
