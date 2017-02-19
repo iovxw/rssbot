@@ -16,6 +16,8 @@ extern crate tokio_curl;
 extern crate telebot;
 
 use std::io::prelude::*;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use telebot::functions::*;
 use tokio_core::reactor::Core;
@@ -48,7 +50,7 @@ fn main() {
     let datafile = &args[1];
     let token = &args[2];
 
-    let db = std::rc::Rc::new(std::cell::RefCell::new(data::Database::open(datafile)
+    let db = Rc::new(RefCell::new(data::Database::open(datafile)
         .map_err(|e| {
             writeln!(&mut std::io::stderr(), "error: {}", e).unwrap();
             for e in e.iter().skip(1) {
@@ -57,7 +59,7 @@ fn main() {
             if let Some(backtrace) = e.backtrace() {
                 writeln!(&mut std::io::stderr(), "backtrace: {:?}", backtrace).unwrap();
             }
-            ::std::process::exit(1);
+            std::process::exit(1);
         })
         .unwrap()));
 
