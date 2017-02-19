@@ -48,7 +48,7 @@ fn main() {
     let datafile = &args[1];
     let token = &args[2];
 
-    let mut db = data::Database::open(datafile)
+    let db = std::rc::Rc::new(std::cell::RefCell::new(data::Database::open(datafile)
         .map_err(|e| {
             writeln!(&mut std::io::stderr(), "error: {}", e).unwrap();
             for e in e.iter().skip(1) {
@@ -59,33 +59,57 @@ fn main() {
             }
             ::std::process::exit(1);
         })
-        .unwrap();
+        .unwrap()));
 
     env_logger::init().unwrap();
 
     let mut lp = Core::new().unwrap();
     let bot = telebot::RcBot::new(lp.handle(), token).update_interval(200);
 
-    let handle = bot.new_cmd("/sub")
-        .and_then(move |(bot, msg)| {
-            let mut text = msg.text.unwrap().to_owned();
-            if text.is_empty() {
-                text = "<empty>".into();
-            }
-
-            match db.subscribe(msg.chat.id, &text, &rss::Channel::default()) {
-                Ok(_) => bot.message(msg.chat.id, text).send(),
-                Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => {
-                    bot.message(msg.chat.id, "已订阅过的 Feed".to_string()).send()
+    {
+        let db = db.clone();
+        let handle = bot.new_cmd("/sub")
+            .and_then(move |(bot, msg)| {
+                let mut text = msg.text.unwrap().to_owned();
+                if text.is_empty() {
+                    text = "<empty>".into();
                 }
-                Err(e) => {
-                    log_error(&e);
-                    bot.message(msg.chat.id, format!("error: {}", e)).send()
-                }
-            }
-        });
 
-    bot.register(handle);
+                match db.borrow_mut().subscribe(msg.chat.id, &text, &rss::Channel::default()) {
+                    Ok(_) => bot.message(msg.chat.id, text).send(),
+                    Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => {
+                        bot.message(msg.chat.id, "已订阅过的 Feed".to_string()).send()
+                    }
+                    Err(e) => {
+                        log_error(&e);
+                        bot.message(msg.chat.id, format!("error: {}", e)).send()
+                    }
+                }
+            });
+        bot.register(handle);
+    }
+    {
+        let db = db.clone();
+        let handle = bot.new_cmd("/unsub")
+            .and_then(move |(bot, msg)| {
+                let mut text = msg.text.unwrap().to_owned();
+                if text.is_empty() {
+                    text = "<empty>".into();
+                }
+
+                match db.borrow_mut().unsubscribe(msg.chat.id, &text) {
+                    Ok(_) => bot.message(msg.chat.id, text).send(),
+                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
+                        bot.message(msg.chat.id, "未订阅过的 Feed".to_string()).send()
+                    }
+                    Err(e) => {
+                        log_error(&e);
+                        bot.message(msg.chat.id, format!("error: {}", e)).send()
+                    }
+                }
+            });
+        bot.register(handle);
+    }
 
     loop {
         if let Err(err) = bot.run(&mut lp) {

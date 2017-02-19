@@ -2,7 +2,7 @@ use std;
 use std::fs::File;
 use std::path::Path;
 use std::hash::{Hash, Hasher};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use rss;
 use serde_json;
@@ -23,18 +23,18 @@ pub struct Feed {
     link: String,
     title: String,
     error_count: u32,
-    hash_list: Vec<u64>,
-    subscribers: Vec<SubscriberID>,
+    hash_list: HashSet<u64>,
+    subscribers: HashSet<SubscriberID>,
 }
 
 #[derive(Debug)]
 pub struct Database {
     path: String,
     feeds: HashMap<FeedID, Feed>,
-    subscribers: HashMap<SubscriberID, Vec<FeedID>>,
+    subscribers: HashMap<SubscriberID, HashSet<FeedID>>,
 }
 
-fn gen_hash_list(items: &[rss::Item]) -> Vec<u64> {
+fn gen_hash_list(items: &[rss::Item]) -> HashSet<u64> {
     items.iter()
         .map(|item| {
             item.guid
@@ -54,7 +54,7 @@ fn gen_hash_list(items: &[rss::Item]) -> Vec<u64> {
 impl Database {
     pub fn create(path: &str) -> Result<Database> {
         let feeds: HashMap<FeedID, Feed> = HashMap::new();
-        let subscribers: HashMap<SubscriberID, Vec<FeedID>> = HashMap::new();
+        let subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
         let mut result = Database {
             path: path.to_owned(),
             feeds: feeds,
@@ -74,15 +74,17 @@ impl Database {
                 serde_json::from_reader(&f).chain_err(|| ErrorKind::DatabaseFormat)?;
 
             let mut feeds: HashMap<FeedID, Feed> = HashMap::with_capacity(feeds_list.len());
-            let mut subscribers: HashMap<SubscriberID, Vec<FeedID>> = HashMap::new();
+            let mut subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
 
             for feed in feeds_list {
                 let feed_id = get_hash(&feed.link);
                 for subscriber in &feed.subscribers {
                     if subscribers.contains_key(subscriber) {
-                        subscribers.get_mut(subscriber).unwrap().push(feed_id);
+                        subscribers.get_mut(subscriber).unwrap().insert(feed_id);
                     } else {
-                        subscribers.insert(subscriber.to_owned(), vec![feed_id]);
+                        let mut sets = HashSet::new();
+                        sets.insert(feed_id);
+                        subscribers.insert(subscriber.to_owned(), sets);
                     }
                 }
                 feeds.insert(feed_id, feed);
@@ -105,11 +107,10 @@ impl Database {
                      -> Result<()> {
         let feed_id = get_hash(rss_link);
         {
-            let subscribed_feed = self.subscribers.entry(subscriber).or_insert_with(|| {
-                Vec::new()
-            });
-            if !subscribed_feed.contains(&feed_id) {
-                subscribed_feed.push(feed_id);
+            let subscribed_feeds =
+                self.subscribers.entry(subscriber).or_insert_with(|| HashSet::new());
+            if !subscribed_feeds.contains(&feed_id) {
+                subscribed_feeds.insert(feed_id);
             } else {
                 return Err(ErrorKind::AlreadySubscribed.into());
             }
@@ -121,11 +122,48 @@ impl Database {
                     title: rss.title.to_owned(),
                     error_count: 0,
                     hash_list: gen_hash_list(&rss.items),
-                    subscribers: Vec::new(),
+                    subscribers: HashSet::new(),
                 }
             });
-            feed.subscribers.push(subscriber);
+            feed.subscribers.insert(subscriber);
         }
+        self.save()
+    }
+
+    pub fn unsubscribe(&mut self, subscriber: SubscriberID, rss_link: &str) -> Result<()> {
+        let feed_id = get_hash(rss_link);
+
+        {
+            let mut clear_subscriber = false;
+            self.subscribers
+                .get_mut(&subscriber)
+                .map(|subscribed_feeds| if !subscribed_feeds.remove(&feed_id) {
+                    Err::<(), Error>(ErrorKind::NotSubscribed.into())
+                } else {
+                    clear_subscriber = subscribed_feeds.len() == 0;
+                    Ok(())
+                })
+                .unwrap_or(Err(ErrorKind::NotSubscribed.into()))?;
+            if clear_subscriber {
+                self.subscribers.remove(&subscriber);
+            }
+        }
+        {
+            let mut clear_feed = false;
+            self.feeds
+                .get_mut(&feed_id)
+                .map(|feed| if !feed.subscribers.remove(&subscriber) {
+                    Err::<(), Error>(ErrorKind::NotSubscribed.into())
+                } else {
+                    clear_feed = feed.subscribers.len() == 0;
+                    Ok(())
+                })
+                .unwrap_or(Err(ErrorKind::NotSubscribed.into()))?;
+            if clear_feed {
+                self.feeds.remove(&feed_id);
+            }
+        }
+
         self.save()
     }
 

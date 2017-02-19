@@ -4,6 +4,8 @@ error_chain! {
 
         AlreadySubscribed
 
+        NotSubscribed
+
         DatabaseOpen(path: String) {
             description("failed to open database")
             display("failed to open database: '{}'", path)
