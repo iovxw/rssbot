@@ -1,9 +1,22 @@
-use quick_xml::error::Error as XmlError;
 error_chain! {
     errors {
         Unknown
+
+        DatabaseOpen(path: String) {
+            description("failed to open database")
+            display("failed to open database: '{}'", path)
+        }
+
+        DatabaseSave(path: String) {
+            description("failed to save database")
+            display("failed to save database: '{}'", path)
+        }
+
+        DatabaseFormat {
+            description("illegal database format")
+        }
     }
     foreign_links {
-        Xml(XmlError);
+        Xml(::quick_xml::error::Error);
     }
 }

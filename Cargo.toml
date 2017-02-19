@@ -4,7 +4,19 @@ version = "0.1.0"
 authors = ["iovxw <iovxw@outlook.com>"]
 
 [dependencies]
+log = "0.3"
+env_logger = "0.3"
 error-chain = "0.9"
-rss = "0.4"
 atom_syndication = "0.3"
-quick-xml = "*"
+
+rss = "0.4"
+quick-xml = "*" # version specified by rss
+
+telebot = "0.1"
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
+curl = "*"
+futures = "*"
+tokio-core = "*"
+tokio-curl = "*"
