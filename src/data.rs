@@ -20,11 +20,11 @@ type SubscriberID = i64;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Feed {
-    link: String,
-    title: String,
-    error_count: u32,
+    pub link: String,
+    pub title: String,
+    pub error_count: u32,
+    pub subscribers: HashSet<SubscriberID>,
     hash_list: HashSet<u64>,
-    subscribers: HashSet<SubscriberID>,
 }
 
 #[derive(Debug)]
@@ -94,6 +94,18 @@ impl Database {
         } else {
             Database::create(path)
         }
+    }
+
+    pub fn get_all_feeds(&self) -> Vec<&Feed> {
+        self.feeds.iter().map(|(_, v)| v).collect()
+    }
+
+    pub fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<&Feed>> {
+        self.subscribers.get(&subscriber).map(|feeds| {
+            feeds.iter()
+                .map(|feed_id| &self.feeds[feed_id])
+                .collect()
+        })
     }
 
     pub fn subscribe(&mut self,

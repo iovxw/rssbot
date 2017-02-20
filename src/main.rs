@@ -70,6 +70,24 @@ fn main() {
 
     {
         let db = db.clone();
+        let handle = bot.new_cmd("/rss")
+            .and_then(move |(bot, msg)| match db.borrow().get_subscribed_feeds(msg.chat.id) {
+                Some(feeds) => {
+                    let mut text = String::from("订阅列表:");
+                    for feed in feeds {
+                        text.push_str(&format!("\n<a href=\"{}\">{}</a>", feed.title, feed.link));
+                    }
+                    bot.message(msg.chat.id, text)
+                        .parse_mode("HTML")
+                        .disable_web_page_preview(true)
+                        .send()
+                }
+                None => bot.message(msg.chat.id, "订阅列表为空".to_string()).send(),
+            });
+        bot.register(handle);
+    }
+    {
+        let db = db.clone();
         let handle = bot.new_cmd("/sub")
             .and_then(move |(bot, msg)| {
                 let mut text = msg.text.unwrap().to_owned();
