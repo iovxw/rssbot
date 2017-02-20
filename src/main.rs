@@ -71,18 +71,62 @@ fn main() {
     {
         let db = db.clone();
         let handle = bot.new_cmd("/rss")
-            .and_then(move |(bot, msg)| match db.borrow().get_subscribed_feeds(msg.chat.id) {
-                Some(feeds) => {
-                    let mut text = String::from("订阅列表:");
-                    for feed in feeds {
-                        text.push_str(&format!("\n<a href=\"{}\">{}</a>", feed.title, feed.link));
+            .and_then(move |(bot, msg)| {
+                let text = msg.text.unwrap();
+                let args: Vec<&str> = text.split_whitespace().collect();
+                let raw: bool;
+                let subscriber: i64;
+                match args.len() {
+                    0 => {
+                        raw = false;
+                        subscriber = msg.chat.id;
                     }
-                    bot.message(msg.chat.id, text)
-                        .parse_mode("HTML")
-                        .disable_web_page_preview(true)
-                        .send()
+                    1 => {
+                        if args[0] == "raw" {
+                            raw = true;
+                            subscriber = msg.chat.id;
+                        } else {
+                            raw = false;
+                            let channel = args[0];
+                            subscriber = msg.chat.id;
+                        }
+                    }
+                    2 => {
+                        raw = true;
+                        let channel = args[0];
+                        subscriber = msg.chat.id;
+                    }
+                    _ => {
+                        return bot.message(msg.chat.id,
+                                     "使用方法： /rss <Channel ID> <raw>".to_string())
+                            .send()
+                    }
                 }
-                None => bot.message(msg.chat.id, "订阅列表为空".to_string()).send(),
+
+                match db.borrow().get_subscribed_feeds(subscriber) {
+                    Some(feeds) => {
+                        let mut text = String::from("订阅列表:");
+                        if raw {
+                            for feed in feeds {
+                                text.push_str(&format!("\n<a href=\"{}\">{}</a>",
+                                                       feed.title,
+                                                       feed.link));
+                            }
+                            bot.message(msg.chat.id, text)
+                                .parse_mode("HTML")
+                                .disable_web_page_preview(true)
+                                .send()
+                        } else {
+                            for feed in feeds {
+                                text.push_str(&format!("\n{}: {}", feed.title, feed.link));
+                            }
+                            bot.message(msg.chat.id, text)
+                                .disable_web_page_preview(true)
+                                .send()
+                        }
+                    }
+                    None => bot.message(msg.chat.id, "订阅列表为空".to_string()).send(),
+                }
             });
         bot.register(handle);
     }
@@ -90,15 +134,31 @@ fn main() {
         let db = db.clone();
         let handle = bot.new_cmd("/sub")
             .and_then(move |(bot, msg)| {
-                let mut text = msg.text.unwrap().to_owned();
-                if text.is_empty() {
-                    text = "<empty>".into();
+                let text = msg.text.unwrap();
+                let args: Vec<&str> = text.split_whitespace().collect();
+                let feed_link: &str;
+                let subscriber: i64;
+                match args.len() {
+                    1 => {
+                        feed_link = args[0];
+                        subscriber = msg.chat.id;
+                    }
+                    2 => {
+                        let channel = args[0];
+                        subscriber = msg.chat.id;
+                        feed_link = args[1];
+                    }
+                    _ => {
+                        return bot.message(msg.chat.id,
+                                     "使用方法： /sub [Channel ID] <RSS URL>".to_string())
+                            .send()
+                    }
                 }
 
-                match db.borrow_mut().subscribe(msg.chat.id, &text, &rss::Channel::default()) {
-                    Ok(_) => bot.message(msg.chat.id, text).send(),
+                match db.borrow_mut().subscribe(subscriber, feed_link, &rss::Channel::default()) {
+                    Ok(_) => bot.message(msg.chat.id, "订阅成功".to_string()).send(),
                     Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => {
-                        bot.message(msg.chat.id, "已订阅过的 Feed".to_string()).send()
+                        bot.message(msg.chat.id, "已订阅过的 RSS".to_string()).send()
                     }
                     Err(e) => {
                         log_error(&e);
@@ -112,13 +172,29 @@ fn main() {
         let db = db.clone();
         let handle = bot.new_cmd("/unsub")
             .and_then(move |(bot, msg)| {
-                let mut text = msg.text.unwrap().to_owned();
-                if text.is_empty() {
-                    text = "<empty>".into();
+                let text = msg.text.unwrap();
+                let args: Vec<&str> = text.split_whitespace().collect();
+                let feed_link: &str;
+                let subscriber: i64;
+                match args.len() {
+                    1 => {
+                        feed_link = args[0];
+                        subscriber = msg.chat.id;
+                    }
+                    2 => {
+                        let channel = args[0];
+                        subscriber = msg.chat.id;
+                        feed_link = args[1];
+                    }
+                    _ => {
+                        return bot.message(msg.chat.id,
+                                     "使用方法： /unsub [Channel ID] <RSS URL>".to_string())
+                            .send()
+                    }
                 }
 
-                match db.borrow_mut().unsubscribe(msg.chat.id, &text) {
-                    Ok(_) => bot.message(msg.chat.id, text).send(),
+                match db.borrow_mut().unsubscribe(subscriber, feed_link) {
+                    Ok(_) => bot.message(msg.chat.id, "退订成功".to_string()).send(),
                     Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
                         bot.message(msg.chat.id, "未订阅过的 Feed".to_string()).send()
                     }
