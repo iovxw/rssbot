@@ -70,8 +70,7 @@ impl Database {
         let p = Path::new(path);
         if p.exists() {
             let f = File::open(path).chain_err(|| ErrorKind::DatabaseOpen(path.to_owned()))?;
-            let feeds_list: Vec<Feed> =
-                serde_json::from_reader(&f).chain_err(|| ErrorKind::DatabaseFormat)?;
+            let feeds_list: Vec<Feed> = serde_json::from_reader(&f).chain_err(|| ErrorKind::DatabaseFormat)?;
 
             let mut feeds: HashMap<FeedID, Feed> = HashMap::with_capacity(feeds_list.len());
             let mut subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
@@ -108,15 +107,10 @@ impl Database {
         })
     }
 
-    pub fn subscribe(&mut self,
-                     subscriber: SubscriberID,
-                     rss_link: &str,
-                     rss: &rss::Channel)
-                     -> Result<()> {
+    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &rss::Channel) -> Result<()> {
         let feed_id = get_hash(rss_link);
         {
-            let subscribed_feeds =
-                self.subscribers.entry(subscriber).or_insert_with(|| HashSet::new());
+            let subscribed_feeds = self.subscribers.entry(subscriber).or_insert_with(|| HashSet::new());
             if !subscribed_feeds.insert(feed_id) {
                 return Err(ErrorKind::AlreadySubscribed.into());
             }
@@ -175,9 +169,7 @@ impl Database {
 
     fn save(&mut self) -> Result<()> {
         let feeds_list: Vec<&Feed> = self.feeds.iter().map(|(_id, feed)| feed).collect();
-        let mut file =
-            File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;
-        serde_json::to_writer(&mut file, &feeds_list)
-            .chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
+        let mut file = File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;
+        serde_json::to_writer(&mut file, &feeds_list).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
     }
 }

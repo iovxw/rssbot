@@ -1,3 +1,5 @@
+#![feature(conservative_impl_trait)]
+
 #[macro_use]
 extern crate log;
 extern crate env_logger;
@@ -38,6 +40,129 @@ fn log_error(e: &errors::Error) {
     }
 }
 
+#[derive(Serialize)]
+pub struct GetChatString {
+    chat_id: String,
+}
+
+pub struct WrapperGetChatString {
+    bot: telebot::RcBot,
+    inner: GetChatString,
+}
+
+impl WrapperGetChatString {
+    pub fn send<'a>(self) -> impl Future<Item = (telebot::RcBot, telebot::objects::Chat), Error = telebot::Error> + 'a {
+        let msg = serde_json::to_string(&self.inner).unwrap();
+        self.bot
+            .inner
+            .fetch_json("getChat", &msg)
+            .map(move |x| (self.bot.clone(), serde_json::from_str::<telebot::objects::Chat>(&x).unwrap()))
+    }
+}
+
+fn get_chat_string(bot: &telebot::RcBot, chat: String) -> WrapperGetChatString {
+    WrapperGetChatString {
+        bot: bot.clone(),
+        inner: GetChatString { chat_id: chat },
+    }
+}
+
+fn check_channel<'a>(bot: &telebot::RcBot,
+                     channel: &str,
+                     chat_id: i64,
+                     user_id: i64)
+                     -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
+    let channel = channel.to_owned();
+    let bot = bot.to_owned();
+    bot.message(chat_id, "正在验证 Channel".to_string())
+        .send()
+        .map_err(|e| Some(e))
+        .and_then(move |(bot, msg)| {
+            get_chat_string(&bot, channel)
+                .send()
+                .or_else(move |e| -> Box<Future<Item = _, Error = Option<telebot::Error>>> {
+                    match e {
+                        telebot::Error::Telegram(err_msg) => {
+                            Box::new(bot.message(chat_id, format!("无法找到目标 Channel: {}", err_msg))
+                                .send()
+                                .then(|result| match result {
+                                    Ok(_) => futures::future::err(None),
+                                    Err(e) => futures::future::err(Some(e)),
+                                }))
+                        }
+                        _ => Box::new(futures::future::err(Some(e))),
+                    }
+                })
+                .map(move |(bot, channel)| (bot, channel, msg.message_id))
+        })
+        .and_then(move |(bot, channel, msg_id)| -> Box<Future<Item = _, Error = Option<_>>> {
+            if channel.kind != "channel" {
+                Box::new(bot.message(chat_id, "目标需为 Channel".to_string())
+                    .send()
+                    .then(|result| match result {
+                        Ok(_) => Err(None),
+                        Err(e) => Err(Some(e)),
+                    }))
+            } else {
+                let channel_id = channel.id;
+                Box::new(bot.unban_chat_administrators(channel_id)
+                    .send()
+                    .or_else(move |e| -> Box<Future<Item = _, Error = Option<_>>> {
+                        match e {
+                            telebot::Error::Telegram(error_msg) => {
+                                Box::new(bot.message(chat_id,
+                                             format!("请先将本 Bot 加入目标 Channel 并设为管理员: {}",
+                                                     error_msg))
+                                    .send()
+                                    .then(|result| match result {
+                                        Ok(_) => futures::future::err(None),
+                                        Err(e) => futures::future::err(Some(e)),
+                                    }))
+                            }
+                            _ => Box::new(futures::future::err(Some(e))),
+                        }
+                    })
+                    .map(move |(bot, admins)| {
+                        let admin_id_list = admins.iter().map(|member| member.user.id).collect::<Vec<i64>>();
+                        (bot, admin_id_list, msg_id, channel_id)
+                    }))
+            }
+        })
+        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| {
+            bot.get_me()
+                .send()
+                .map_err(|e| Some(e))
+                .map(move |(bot, me)| (bot, me.id, admin_id_list, msg_id, channel_id))
+        })
+        .and_then(move |(bot, bot_id, admin_id_list, msg_id, channel_id)| -> Box<Future<Item = i64, Error = Option<_>>> {
+            if admin_id_list.contains(&bot_id) {
+                if admin_id_list.contains(&user_id) {
+                    Box::new(futures::future::ok(channel_id))
+                } else {
+                    Box::new(bot.message(chat_id,
+                                 "该命令只能由 Channel 管理员使用".to_string())
+                        .send()
+                        .then(|result| match result {
+                            Ok(_) => futures::future::err(None),
+                            Err(e) => futures::future::err(Some(e)),
+                        }))
+                }
+            } else {
+                Box::new(bot.message(chat_id, "请将本 Bot 设为管理员".to_string())
+                    .send()
+                    .then(|result| match result {
+                        Ok(_) => futures::future::err(None),
+                        Err(e) => futures::future::err(Some(e)),
+                    }))
+            }
+        })
+        .then(|result| match result {
+            Err(None) => futures::future::ok(None),
+            Err(Some(e)) => futures::future::err(e),
+            Ok(ok) => futures::future::ok(Some(ok)),
+        })
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
@@ -71,48 +196,62 @@ fn main() {
     {
         let db = db.clone();
         let handle = bot.new_cmd("/rss")
-            .and_then(move |(bot, msg)| {
+            .map_err(|e| Some(e))
+            .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
                 let text = msg.text.unwrap();
                 let args: Vec<&str> = text.split_whitespace().collect();
                 let raw: bool;
-                let subscriber: i64;
+                let subscriber: Box<Future<Item = Option<i64>, Error = telebot::Error>>;
                 match args.len() {
                     0 => {
                         raw = false;
-                        subscriber = msg.chat.id;
+                        subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
                     }
                     1 => {
                         if args[0] == "raw" {
                             raw = true;
-                            subscriber = msg.chat.id;
+                            subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
                         } else {
                             raw = false;
                             let channel = args[0];
-                            subscriber = msg.chat.id;
+                            subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
                         }
                     }
                     2 => {
                         raw = true;
                         let channel = args[0];
-                        subscriber = msg.chat.id;
+                        subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
                     }
                     _ => {
-                        return bot.message(msg.chat.id,
+                        return Box::new(bot.message(msg.chat.id,
                                      "使用方法： /rss <Channel ID> <raw>".to_string())
                             .send()
+                            .then(|result| match result {
+                                Ok(_) => Err(None),
+                                Err(e) => Err(Some(e)),
+                            }))
                     }
                 }
 
-                match db.borrow().get_subscribed_feeds(subscriber) {
+                let bot = bot.clone();
+                let db = db.clone();
+                let chat_id = msg.chat.id;
+                Box::new(subscriber.then(|result| match result {
+                        Ok(Some(ok)) => Ok(ok),
+                        Ok(None) => Err(None),
+                        Err(err) => Err(Some(err)),
+                    })
+                    .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
+            })
+            .and_then(move |(bot, db, subscriber, raw, chat_id)| {
+                let r = match db.borrow().get_subscribed_feeds(subscriber) {
                     Some(feeds) => {
                         let mut text = String::from("订阅列表:");
-                        if raw {
+                        if !raw {
                             for feed in feeds {
-                                text.push_str(&format!("\n<a href=\"{}\">{}</a>",
-                                                       feed.title,
-                                                       feed.link));
+                                text.push_str(&format!("\n<a href=\"{}\">{}</a>", feed.title, feed.link));
                             }
-                            bot.message(msg.chat.id, text)
+                            bot.message(chat_id, text)
                                 .parse_mode("HTML")
                                 .disable_web_page_preview(true)
                                 .send()
@@ -120,90 +259,144 @@ fn main() {
                             for feed in feeds {
                                 text.push_str(&format!("\n{}: {}", feed.title, feed.link));
                             }
-                            bot.message(msg.chat.id, text)
+                            bot.message(chat_id, text)
                                 .disable_web_page_preview(true)
                                 .send()
                         }
                     }
-                    None => bot.message(msg.chat.id, "订阅列表为空".to_string()).send(),
-                }
+                    None => {
+                        bot.message(chat_id, "订阅列表为空".to_string())
+                            .send()
+                    }
+                };
+                r.map_err(|e| Some(e))
+            })
+            .then(|result| match result {
+                Ok(_) => Ok(()),
+                Err(None) => Ok(()),
+                Err(Some(err)) => Err(err),
             });
+
         bot.register(handle);
     }
     {
         let db = db.clone();
         let handle = bot.new_cmd("/sub")
-            .and_then(move |(bot, msg)| {
+            .map_err(|e| Some(e))
+            .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
                 let text = msg.text.unwrap();
                 let args: Vec<&str> = text.split_whitespace().collect();
                 let feed_link: &str;
-                let subscriber: i64;
+                let subscriber: Box<Future<Item = Option<i64>, Error = telebot::Error>>;
                 match args.len() {
                     1 => {
                         feed_link = args[0];
-                        subscriber = msg.chat.id;
+                        subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
                     }
                     2 => {
                         let channel = args[0];
-                        subscriber = msg.chat.id;
+                        subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
                         feed_link = args[1];
                     }
                     _ => {
-                        return bot.message(msg.chat.id,
+                        return Box::new(bot.message(msg.chat.id,
                                      "使用方法： /sub [Channel ID] <RSS URL>".to_string())
                             .send()
+                            .then(|result| match result {
+                                Ok(_) => Err(None),
+                                Err(e) => Err(Some(e)),
+                            }))
                     }
                 }
 
-                match db.borrow_mut().subscribe(subscriber, feed_link, &rss::Channel::default()) {
-                    Ok(_) => bot.message(msg.chat.id, "订阅成功".to_string()).send(),
-                    Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => {
-                        bot.message(msg.chat.id, "已订阅过的 RSS".to_string()).send()
-                    }
+
+                let bot = bot.clone();
+                let db = db.clone();
+                let feed_link = feed_link.to_owned();
+                let chat_id = msg.chat.id;
+                Box::new(subscriber.then(|result| match result {
+                        Ok(Some(ok)) => Ok(ok),
+                        Ok(None) => Err(None),
+                        Err(err) => Err(Some(err)),
+                    })
+                    .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
+            })
+            .and_then(move |(bot, db, subscriber, feed_link, chat_id)| {
+                let r = match db.borrow_mut().subscribe(subscriber, &feed_link, &rss::Channel::default()) {
+                    Ok(_) => bot.message(chat_id, "订阅成功".to_string()).send(),
+                    Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => bot.message(chat_id, "已订阅过的 RSS".to_string()).send(),
                     Err(e) => {
                         log_error(&e);
-                        bot.message(msg.chat.id, format!("error: {}", e)).send()
+                        bot.message(chat_id, format!("error: {}", e)).send()
                     }
-                }
+                };
+                r.map_err(|e| Some(e))
+            })
+            .then(|result| match result {
+                Ok(_) => Ok(()),
+                Err(None) => Ok(()),
+                Err(Some(err)) => Err(err),
             });
+
         bot.register(handle);
     }
     {
         let db = db.clone();
         let handle = bot.new_cmd("/unsub")
-            .and_then(move |(bot, msg)| {
+            .map_err(|e| Some(e))
+            .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
                 let text = msg.text.unwrap();
                 let args: Vec<&str> = text.split_whitespace().collect();
                 let feed_link: &str;
-                let subscriber: i64;
+                let subscriber: Box<Future<Item = Option<i64>, Error = telebot::Error>>;
                 match args.len() {
                     1 => {
                         feed_link = args[0];
-                        subscriber = msg.chat.id;
+                        subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
                     }
                     2 => {
                         let channel = args[0];
-                        subscriber = msg.chat.id;
+                        subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
                         feed_link = args[1];
                     }
                     _ => {
-                        return bot.message(msg.chat.id,
+                        return Box::new(bot.message(msg.chat.id,
                                      "使用方法： /unsub [Channel ID] <RSS URL>".to_string())
                             .send()
+                            .then(|result| match result {
+                                Ok(_) => Err(None),
+                                Err(e) => Err(Some(e)),
+                            }))
                     }
                 }
-
-                match db.borrow_mut().unsubscribe(subscriber, feed_link) {
-                    Ok(_) => bot.message(msg.chat.id, "退订成功".to_string()).send(),
-                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
-                        bot.message(msg.chat.id, "未订阅过的 Feed".to_string()).send()
-                    }
+                let bot = bot.clone();
+                let db = db.clone();
+                let feed_link = feed_link.to_owned();
+                let chat_id = msg.chat.id;
+                Box::new(subscriber.then(|result| match result {
+                        Ok(Some(ok)) => Ok(ok),
+                        Ok(None) => Err(None),
+                        Err(err) => Err(Some(err)),
+                    })
+                    .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
+            })
+            .and_then(move |(bot, db, subscriber, feed_link, chat_id)| {
+                let r = match db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                    Ok(_) => bot.message(chat_id, "退订成功".to_string()).send(),
+                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => bot.message(chat_id, "未订阅过的 Feed".to_string()).send(),
                     Err(e) => {
                         log_error(&e);
-                        bot.message(msg.chat.id, format!("error: {}", e)).send()
+                        bot.message(chat_id, format!("error: {}", e)).send()
                     }
-                }
+                };
+                r.map_err(|e| Some(e))
+            })
+            .then(|result| match result {
+                Ok(_) => Ok(()),
+                Err(None) => Ok(()),
+                Err(Some(err)) => Err(err),
             });
+
         bot.register(handle);
     }
 
