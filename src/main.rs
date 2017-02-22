@@ -155,7 +155,7 @@ fn check_channel<'a>(bot: &telebot::RcBot,
 
 fn to_chinese_error_msg(e: errors::Error) -> String {
     match e {
-        errors::Error(errors::ErrorKind::Curl(e), _) => format!("网络错误 ({})", e),
+        errors::Error(errors::ErrorKind::Curl(e), _) => format!("网络错误 ({})", e.into_error()),
         errors::Error(errors::ErrorKind::Utf8(e), _) => format!("编码错误 ({})", e),
         errors::Error(errors::ErrorKind::Xml(e), _) => {
             let mut msg = format!("{}", e);
