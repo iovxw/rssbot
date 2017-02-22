@@ -1,5 +1,11 @@
+use std::str;
+use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::time::Duration;
 
+use curl::easy::Easy;
+use futures::Future;
+use tokio_curl::Session;
 use rss;
 use atom;
 
@@ -89,21 +95,46 @@ fn feed_to_channel(feed: atom::Feed) -> rss::Channel {
 
 pub fn parse(s: &str) -> Result<rss::Channel> {
     s.parse::<rss::Channel>()
-        .or_else(|err| match err {
+        .or_else(|rss_err| match rss_err {
             rss::Error::Xml(err) |
             rss::Error::XmlParsing(err, _) => Err(ErrorKind::Xml(err).into()),
             _ => {
                 if s.contains("<channel>") {
-                    Err(format!("{}", err).into())
+                    Err(format!("{}", rss_err).into())
                 } else {
                     s.parse::<atom::Feed>()
                         .map(feed_to_channel)
-                        .map_err(|err| if s.contains("<entry>") {
-                            err.into()
+                        .map_err(|atom_err| if s.contains("<entry>") {
+                            atom_err.into()
                         } else {
-                            ErrorKind::Unknown.into()
+                            format!("{}", rss_err).into()
                         })
                 }
             }
         })
+}
+
+pub fn fetch_feed<'a>(session: Session, link: &str) -> impl Future<Item = rss::Channel, Error = Error> + 'a {
+    let mut req = Easy::new();
+    let buf = Arc::new(Mutex::new(Vec::new()));
+    {
+        let buf = buf.clone();
+        req.get(true).unwrap();
+        req.url(link).unwrap();
+        req.follow_location(true).unwrap();
+        req.timeout(Duration::from_secs(10)).unwrap();
+        req.write_function(move |data| {
+                buf.lock().unwrap().extend_from_slice(data);
+                Ok(data.len())
+            })
+            .unwrap();
+    }
+    session.perform(req).map_err(|e| e.into()).and_then(move |mut resp| {
+        let response_code = resp.response_code().unwrap();
+        if response_code != 200 {
+            return Err(ErrorKind::Http(response_code).into());
+        }
+        let s = String::from(str::from_utf8(&buf.lock().unwrap())?);
+        parse(&s)
+    })
 }

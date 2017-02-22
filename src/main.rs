@@ -25,6 +25,7 @@ use telebot::functions::*;
 use tokio_core::reactor::Core;
 use futures::Future;
 use futures::Stream;
+use tokio_curl::Session;
 
 mod errors;
 mod feed;
@@ -150,6 +151,22 @@ fn check_channel<'a>(bot: &telebot::RcBot,
         })
 }
 
+fn to_chinese_error_msg(e: errors::Error) -> String {
+    match e {
+        errors::Error(errors::ErrorKind::Curl(e), _) => format!("网络错误 ({})", e),
+        errors::Error(errors::ErrorKind::Utf8(e), _) => format!("编码错误 ({})", e),
+        errors::Error(errors::ErrorKind::Xml(e), _) => {
+            let mut msg = format!("{}", e);
+            if msg.len() > 500 {
+                msg.truncate(500);
+                msg.push_str("...");
+            }
+            format!("解析错误 ({})", msg)
+        }
+        _ => format!("{}", e),
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
@@ -230,7 +247,7 @@ fn main() {
                     })
                     .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
             })
-            .and_then(move |(bot, db, subscriber, raw, chat_id)| {
+            .and_then(|(bot, db, subscriber, raw, chat_id)| {
                 let r = match db.borrow().get_subscribed_feeds(subscriber) {
                     Some(feeds) => {
                         let mut text = String::from("订阅列表:");
@@ -268,6 +285,7 @@ fn main() {
     }
     {
         let db = db.clone();
+        let lphandle = lp.handle();
         let handle = bot.new_cmd("/sub")
             .map_err(|e| Some(e))
             .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
@@ -296,21 +314,43 @@ fn main() {
                     }
                 }
 
-
                 let bot = bot.clone();
                 let db = db.clone();
                 let feed_link = feed_link.to_owned();
                 let chat_id = msg.chat.id;
+                let lphandle = lphandle.clone();
                 Box::new(subscriber.then(|result| match result {
                         Ok(Some(ok)) => Ok(ok),
                         Ok(None) => Err(None),
                         Err(err) => Err(Some(err)),
                     })
-                    .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
+                    .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id, lphandle)))
             })
-            .and_then(move |(bot, db, subscriber, feed_link, chat_id)| {
-                let r = match db.borrow_mut().subscribe(subscriber, &feed_link, &rss::Channel::default()) {
-                    Ok(_) => bot.message(chat_id, "订阅成功".to_string()).send(),
+            .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
+                let session = Session::new(lphandle);
+                let bot2 = bot.clone();
+                feed::fetch_feed(session, &feed_link)
+                    .map(move |feed| (bot2, db, subscriber, feed_link, chat_id, feed))
+                    .or_else(move |e| {
+                        bot.message(chat_id,
+                                     format!("订阅失败: {}", to_chinese_error_msg(e)))
+                            .send()
+                            .then(|result| match result {
+                                Ok(_) => Err(None),
+                                Err(e) => Err(Some(e)),
+                            })
+                    })
+            })
+            .and_then(|(bot, db, subscriber, feed_link, chat_id, feed)| {
+                let r = match db.borrow_mut().subscribe(subscriber, &feed_link, &feed) {
+                    Ok(_) => {
+                        bot.message(chat_id,
+                                     format!("《<a href=\"{}\">{}</a>》订阅成功",
+                                             feed.link,
+                                             feed.title))
+                            .parse_mode("HTML")
+                            .send()
+                    }
                     Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => bot.message(chat_id, "已订阅过的 RSS".to_string()).send(),
                     Err(e) => {
                         log_error(&e);
@@ -367,7 +407,7 @@ fn main() {
                     })
                     .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
             })
-            .and_then(move |(bot, db, subscriber, feed_link, chat_id)| {
+            .and_then(|(bot, db, subscriber, feed_link, chat_id)| {
                 let r = match db.borrow_mut().unsubscribe(subscriber, &feed_link) {
                     Ok(_) => bot.message(chat_id, "退订成功".to_string()).send(),
                     Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => bot.message(chat_id, "未订阅过的 Feed".to_string()).send(),
@@ -388,7 +428,7 @@ fn main() {
     }
 
     loop {
-        if let Err(err) = bot.run(&mut lp) {
+        if let Err(err) = lp.run(bot.get_stream().for_each(|_| Ok(()))) {
             error!("{:?}", err);
         }
     }
