@@ -31,8 +31,10 @@ mod errors;
 mod feed;
 mod data;
 mod telebot_missing;
+mod utlis;
 
 use telebot_missing::{get_chat_string, edit_message_text};
+use utlis::Escape;
 
 fn log_error(e: &errors::Error) {
     warn!("error: {}", e);
@@ -253,7 +255,9 @@ fn main() {
                         let mut text = String::from("订阅列表:");
                         if !raw {
                             for feed in feeds {
-                                text.push_str(&format!("\n<a href=\"{}\">{}</a>", feed.title, feed.link));
+                                text.push_str(&format!("\n<a href=\"{}\">{}</a>",
+                                                       Escape(&feed.title),
+                                                       Escape(&feed.link)));
                             }
                             bot.message(chat_id, text)
                                 .parse_mode("HTML")
@@ -346,8 +350,8 @@ fn main() {
                     Ok(_) => {
                         bot.message(chat_id,
                                      format!("《<a href=\"{}\">{}</a>》订阅成功",
-                                             feed.link,
-                                             feed.title))
+                                             Escape(&feed.link),
+                                             Escape(&feed.title)))
                             .parse_mode("HTML")
                             .send()
                     }
