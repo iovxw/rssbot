@@ -60,6 +60,59 @@ impl WrapperGetChatString {
     }
 }
 
+#[derive(Serialize)]
+pub struct EditMessageText {
+    chat_id: i64,
+    message_id: i64,
+    text: String,
+    #[serde(skip_serializing_if="Option::is_none")]
+    parse_mode: Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    disable_web_page_preview: Option<bool>,
+}
+
+pub struct WrapperEditMessageText {
+    bot: telebot::RcBot,
+    inner: EditMessageText,
+}
+
+impl WrapperEditMessageText {
+    pub fn send<'a>(self) -> impl Future<Item = (telebot::RcBot, telebot::objects::Message), Error = telebot::Error> + 'a {
+        let msg = serde_json::to_string(&self.inner).unwrap();
+        self.bot
+            .inner
+            .fetch_json("editMessageText", &msg)
+            .map(move |x| (self.bot.clone(), serde_json::from_str::<telebot::objects::Message>(&x).unwrap()))
+    }
+
+    pub fn parse_mode<S>(mut self, val: S) -> Self
+        where S: Into<String>
+    {
+        self.inner.parse_mode = Some(val.into());
+        self
+    }
+
+    pub fn disable_web_page_preview<S>(mut self, val: S) -> Self
+        where S: Into<bool>
+    {
+        self.inner.disable_web_page_preview = Some(val.into());
+        self
+    }
+}
+
+fn edit_message_text(bot: &telebot::RcBot, chat_id: i64, message_id: i64, text: String) -> WrapperEditMessageText {
+    WrapperEditMessageText {
+        bot: bot.clone(),
+        inner: EditMessageText {
+            chat_id: chat_id,
+            message_id: message_id,
+            text: text,
+            parse_mode: None,
+            disable_web_page_preview: None,
+        },
+    }
+}
+
 fn get_chat_string(bot: &telebot::RcBot, chat: String) -> WrapperGetChatString {
     WrapperGetChatString {
         bot: bot.clone(),
@@ -78,12 +131,16 @@ fn check_channel<'a>(bot: &telebot::RcBot,
         .send()
         .map_err(|e| Some(e))
         .and_then(move |(bot, msg)| {
+            let msg_id = msg.message_id;
             get_chat_string(&bot, channel)
                 .send()
                 .or_else(move |e| -> Box<Future<Item = _, Error = Option<telebot::Error>>> {
                     match e {
                         telebot::Error::Telegram(err_msg) => {
-                            Box::new(bot.message(chat_id, format!("无法找到目标 Channel: {}", err_msg))
+                            Box::new(edit_message_text(&bot,
+                                                       chat_id,
+                                                       msg_id,
+                                                       format!("无法找到目标 Channel: {}", err_msg))
                                 .send()
                                 .then(|result| match result {
                                     Ok(_) => futures::future::err(None),
@@ -93,7 +150,7 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                         _ => Box::new(futures::future::err(Some(e))),
                     }
                 })
-                .map(move |(bot, channel)| (bot, channel, msg.message_id))
+                .map(move |(bot, channel)| (bot, channel, msg_id))
         })
         .and_then(move |(bot, channel, msg_id)| -> Box<Future<Item = _, Error = Option<_>>> {
             if channel.kind != "channel" {
@@ -110,9 +167,11 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                     .or_else(move |e| -> Box<Future<Item = _, Error = Option<_>>> {
                         match e {
                             telebot::Error::Telegram(error_msg) => {
-                                Box::new(bot.message(chat_id,
-                                             format!("请先将本 Bot 加入目标 Channel 并设为管理员: {}",
-                                                     error_msg))
+                                Box::new(edit_message_text(&bot,
+                                                           chat_id,
+                                                           msg_id,
+                                                           format!("请先将本 Bot 加入目标 Channel 并设为管理员: {}",
+                                                                   error_msg))
                                     .send()
                                     .then(|result| match result {
                                         Ok(_) => futures::future::err(None),
@@ -139,8 +198,10 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                 if admin_id_list.contains(&user_id) {
                     Box::new(futures::future::ok(channel_id))
                 } else {
-                    Box::new(bot.message(chat_id,
-                                 "该命令只能由 Channel 管理员使用".to_string())
+                    Box::new(edit_message_text(&bot,
+                                               chat_id,
+                                               msg_id,
+                                               "该命令只能由 Channel 管理员使用".to_string())
                         .send()
                         .then(|result| match result {
                             Ok(_) => futures::future::err(None),
@@ -148,7 +209,10 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                         }))
                 }
             } else {
-                Box::new(bot.message(chat_id, "请将本 Bot 设为管理员".to_string())
+                Box::new(edit_message_text(&bot,
+                                           chat_id,
+                                           msg_id,
+                                           "请将本 Bot 设为管理员".to_string())
                     .send()
                     .then(|result| match result {
                         Ok(_) => futures::future::err(None),
