@@ -107,7 +107,10 @@ pub fn parse(s: &str) -> Result<rss::Channel> {
                         .map_err(|atom_err| if s.contains("<entry>") {
                             atom_err.into()
                         } else {
-                            format!("{}", rss_err).into()
+                            match rss_err {
+                                rss::Error::EOF => ErrorKind::EOF.into(),
+                                _ => ErrorKind::Unknown(format!("{}", rss_err)).into(),
+                            }
                         })
                 }
             }

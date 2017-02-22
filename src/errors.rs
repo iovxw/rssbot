@@ -1,10 +1,17 @@
 error_chain! {
     errors {
-        Unknown
-
         AlreadySubscribed
 
         NotSubscribed
+
+        EOF {
+            description("unexpected EOF")
+        }
+
+        Unknown(s: String) {
+            description("unknown error")
+            display("unknown error: {}", s)
+        }
 
         Http(code: u32) {
             description("unexpected HTTP response code")
