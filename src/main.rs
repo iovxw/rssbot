@@ -330,6 +330,18 @@ fn main() {
                     })
                     .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id, lphandle)))
             })
+            .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| -> Box<Future<Item = _, Error = _>> {
+                if db.borrow().is_subscribed(subscriber, &feed_link) {
+                    Box::new(bot.message(chat_id, "已订阅过的 RSS".to_string())
+                        .send()
+                        .then(|result| match result {
+                            Ok(_) => Err(None),
+                            Err(e) => Err(Some(e)),
+                        }))
+                } else {
+                    Box::new(futures::future::ok((bot, db, subscriber, feed_link, chat_id, lphandle)))
+                }
+            })
             .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
                 let session = Session::new(lphandle);
                 let bot2 = bot.clone();
@@ -355,7 +367,6 @@ fn main() {
                             .parse_mode("HTML")
                             .send()
                     }
-                    Err(errors::Error(errors::ErrorKind::AlreadySubscribed, _)) => bot.message(chat_id, "已订阅过的 RSS".to_string()).send(),
                     Err(e) => {
                         log_error(&e);
                         bot.message(chat_id, format!("error: {}", e)).send()

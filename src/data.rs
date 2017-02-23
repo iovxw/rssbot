@@ -107,6 +107,10 @@ impl Database {
         })
     }
 
+    pub fn is_subscribed(&self, subscriber: SubscriberID, rss_link: &str) -> bool {
+        self.subscribers.get(&subscriber).map(|feeds| feeds.contains(&get_hash(rss_link))).unwrap_or(false)
+    }
+
     pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &rss::Channel) -> Result<()> {
         let feed_id = get_hash(rss_link);
         {
