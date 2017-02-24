@@ -170,6 +170,10 @@ fn to_chinese_error_msg(e: errors::Error) -> String {
     }
 }
 
+fn shoud_unsubscribe_for_user(tg_err_msg: &str) -> bool {
+    tg_err_msg.contains("Forbidden") || tg_err_msg.contains("chat not found") || tg_err_msg.contains("group chat was migrated to a supergroup chat")
+}
+
 fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                           db: Rc<RefCell<data::Database>>,
                           session: Session,
@@ -181,7 +185,8 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
         let bot = bot.clone();
         let feed = feed.clone();
         feed::fetch_feed(&session, &feed.link).or_else(move |e| -> Box<Future<Item = rss::Channel, Error = ()>> {
-            if db.borrow_mut().inc_error_count(&feed.link) > 10 {
+            if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
+                // 1440 * 5 minute = 5 days
                 let err_msg = to_chinese_error_msg(e);
                 let mut msgs = Vec::with_capacity(feed.subscribers.len());
                 for &subscriber in &feed.subscribers {
@@ -198,12 +203,15 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                     let bot = bot.clone();
                     let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
                         match e {
-                            telebot::error::Error::Telegram(s) => {
+                            telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
                                 db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
-                                Box::new(bot.message(subscriber, format!("{}", s)).send().then(|_| Ok(())))
+                                Box::new(bot.message(subscriber,
+                                             format!("无法修复的错误 ({})，自动退订", s))
+                                    .send()
+                                    .then(|_| Ok(())))
                             }
                             _ => {
-                                error!("failed to send error to {}, {:?}", subscriber, e);
+                                warn!("failed to send error to {}, {:?}", subscriber, e);
                                 futures::future::ok(()).boxed()
                             }
                         }
@@ -244,12 +252,15 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
             let bot = bot.clone();
             let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
                 match e {
-                    telebot::error::Error::Telegram(s) => {
+                    telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
                         db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
-                        Box::new(bot.message(subscriber, format!("{}", s)).send().then(|_| Ok(())))
+                        Box::new(bot.message(subscriber,
+                                     format!("无法修复的错误 ({})，自动退订", s))
+                            .send()
+                            .then(|_| Ok(())))
                     }
                     _ => {
-                        error!("failed to send updates to {}, {:?}", subscriber, e);
+                        warn!("failed to send updates to {}, {:?}", subscriber, e);
                         futures::future::ok(()).boxed()
                     }
                 }
