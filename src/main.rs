@@ -47,13 +47,18 @@ fn log_error(e: &errors::Error) {
     }
 }
 
-fn check_channel<'a>(bot: &telebot::RcBot,
-                     channel: &str,
-                     chat_id: i64,
-                     user_id: i64)
-                     -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
-    let channel = channel.to_owned();
-    let bot = bot.to_owned();
+fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: i64) -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
+    let channel = channel.parse::<i64>()
+        .map(|_| if !channel.starts_with("-100") {
+            format!("-100{}", channel)
+        } else {
+            channel.to_owned()
+        })
+        .unwrap_or_else(|_| if !channel.starts_with("@") {
+            format!("@{}", channel)
+        } else {
+            channel.to_owned()
+        });
     bot.message(chat_id, "正在验证 Channel".to_string())
         .send()
         .map_err(|e| Some(e))
@@ -322,13 +327,13 @@ fn main() {
                         } else {
                             raw = false;
                             let channel = args[0];
-                            subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                            subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
                         }
                     }
                     2 => {
                         raw = true;
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                        subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
                     }
                     _ => {
                         return Box::new(bot.message(msg.chat.id,
@@ -406,7 +411,7 @@ fn main() {
                     }
                     2 => {
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                        subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
                         feed_link = args[1];
                     }
                     _ => {
@@ -501,7 +506,7 @@ fn main() {
                     }
                     2 => {
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                        subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
                         feed_link = args[1];
                     }
                     _ => {
