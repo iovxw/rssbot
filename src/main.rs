@@ -20,9 +20,10 @@ extern crate telebot;
 use std::io::prelude::*;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::time::Duration;
 
 use telebot::functions::*;
-use tokio_core::reactor::Core;
+use tokio_core::reactor::{Core, Interval};
 use futures::Future;
 use futures::Stream;
 use tokio_curl::Session;
@@ -167,6 +168,96 @@ fn to_chinese_error_msg(e: errors::Error) -> String {
         }
         _ => format!("{}", e),
     }
+}
+
+fn fetch_feed_updates<'a>(bot: telebot::RcBot,
+                          db: Rc<RefCell<data::Database>>,
+                          session: Session,
+                          feed: data::Feed)
+                          -> impl Future<Item = (), Error = ()> + 'a {
+    info!("fetching: {} {}", feed.title, feed.link);
+    let r = {
+        let db = db.clone();
+        let bot = bot.clone();
+        let feed = feed.clone();
+        feed::fetch_feed(&session, &feed.link).or_else(move |e| -> Box<Future<Item = rss::Channel, Error = ()>> {
+            if db.borrow_mut().inc_error_count(&feed.link) > 10 {
+                let err_msg = to_chinese_error_msg(e);
+                let mut msgs = Vec::with_capacity(feed.subscribers.len());
+                for &subscriber in &feed.subscribers {
+                    let m = bot.message(subscriber,
+                                 format!("《<a href=\"{}\">{}</a>》已经连续 5 天拉取出错 ({})，可能已经关闭，请取消订阅",
+                                         Escape(&feed.link),
+                                         Escape(&feed.title),
+                                         Escape(&err_msg)))
+                        .parse_mode("HTML")
+                        .disable_web_page_preview(true)
+                        .send();
+                    let feed_link = feed.link.clone();
+                    let db = db.clone();
+                    let bot = bot.clone();
+                    let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+                        match e {
+                            telebot::error::Error::Telegram(s) => {
+                                db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
+                                Box::new(bot.message(subscriber, format!("{}", s)).send().then(|_| Ok(())))
+                            }
+                            _ => {
+                                error!("failed to send error to {}, {:?}", subscriber, e);
+                                futures::future::ok(()).boxed()
+                            }
+                        }
+                    });
+                    msgs.push(r);
+                }
+                Box::new(futures::future::join_all(msgs).then(|_| Err(())))
+            } else {
+                futures::future::err(()).boxed()
+            }
+        })
+    };
+    let r = {
+        r.and_then(move |rss| {
+            let updates = db.borrow_mut().update(&feed.link, rss.items);
+            if updates.is_empty() {
+                Box::new(futures::future::err(()))
+            } else {
+                Box::new(futures::future::ok((bot, db, feed, rss.title, rss.link, updates)))
+            }
+        })
+    };
+    r.and_then(|(bot, db, feed, rss_title, rss_link, updates)| {
+        let mut msg = format!("<b>{}</b>", Escape(&rss_title));
+        for item in updates {
+            msg.push_str(&format!("\n<a href=\"{}\">{}</a>",
+                                  Escape(&item.link.as_ref().unwrap_or_else(|| &rss_link)),
+                                  Escape(&item.title.as_ref().unwrap_or_else(|| &rss_title))));
+        }
+        let mut msgs = Vec::with_capacity(feed.subscribers.len());
+        for &subscriber in &feed.subscribers {
+            let m = bot.message(subscriber, msg.clone())
+                .parse_mode("HTML")
+                .disable_web_page_preview(true)
+                .send();
+            let feed_link = feed.link.clone();
+            let db = db.clone();
+            let bot = bot.clone();
+            let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+                match e {
+                    telebot::error::Error::Telegram(s) => {
+                        db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
+                        Box::new(bot.message(subscriber, format!("{}", s)).send().then(|_| Ok(())))
+                    }
+                    _ => {
+                        error!("failed to send updates to {}, {:?}", subscriber, e);
+                        futures::future::ok(()).boxed()
+                    }
+                }
+            });
+            msgs.push(r);
+        }
+        futures::future::join_all(msgs).then(|_| Ok(()))
+    })
 }
 
 fn main() {
@@ -345,7 +436,7 @@ fn main() {
             .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
                 let session = Session::new(lphandle);
                 let bot2 = bot.clone();
-                feed::fetch_feed(session, &feed_link)
+                feed::fetch_feed(&session, &feed_link)
                     .map(move |feed| (bot2, db, subscriber, feed_link, chat_id, feed))
                     .or_else(move |e| {
                         bot.message(chat_id,
@@ -365,6 +456,7 @@ fn main() {
                                              Escape(&feed.link),
                                              Escape(&feed.title)))
                             .parse_mode("HTML")
+                            .disable_web_page_preview(true)
                             .send()
                     }
                     Err(e) => {
@@ -442,9 +534,25 @@ fn main() {
         bot.register(handle);
     }
 
+    {
+        let session = Session::new(lp.handle());
+        let handle = lp.handle();
+        let bot = bot.clone();
+        lp.handle().spawn(Interval::new(Duration::from_secs(10), &lp.handle())
+            .unwrap()
+            .for_each(move |_| {
+                let feeds = db.borrow().get_all_feeds();
+                for feed in feeds {
+                    handle.spawn(fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed));
+                }
+                Ok(())
+            })
+            .map_err(|e| error!("feed loop error: {}", e)))
+    }
+
     loop {
         if let Err(err) = lp.run(bot.get_stream().for_each(|_| Ok(()))) {
-            error!("{:?}", err);
+            error!("telebot: {:?}", err);
         }
     }
 }

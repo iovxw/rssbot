@@ -1,3 +1,5 @@
+#![warn(dead_code)]
+
 use telebot;
 use serde_json;
 use futures::Future;

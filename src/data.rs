@@ -18,7 +18,7 @@ fn get_hash<T: Hash>(t: T) -> u64 {
 type FeedID = u64;
 type SubscriberID = i64;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feed {
     pub link: String,
     pub title: String,
@@ -34,21 +34,31 @@ pub struct Database {
     subscribers: HashMap<SubscriberID, HashSet<FeedID>>,
 }
 
-fn gen_hash_list(items: &[rss::Item]) -> HashSet<u64> {
-    items.iter()
-        .map(|item| {
-            item.guid
-                .as_ref()
-                .map(|guid| get_hash(&guid.value))
-                .unwrap_or_else(|| {
-                    let default = "".to_string();
-                    let title = item.title.as_ref().unwrap_or(&default);
-                    let link = item.link.as_ref().unwrap_or(&default);
-                    let string = String::with_capacity(title.len() + link.len());
-                    get_hash(string)
-                })
+fn gen_item_hash(item: &rss::Item) -> u64 {
+    item.guid
+        .as_ref()
+        .map(|guid| get_hash(&guid.value))
+        .unwrap_or_else(|| {
+            let default = "".to_string();
+            let title = item.title.as_ref().unwrap_or(&default);
+            let link = item.link.as_ref().unwrap_or(&default);
+            let string = String::with_capacity(title.len() + link.len());
+            get_hash(string)
         })
-        .collect()
+}
+
+fn truncate_hashset<T, S>(set: &mut HashSet<T, S>, u: usize)
+    where T: std::hash::Hash + Clone + Eq,
+          S: std::hash::BuildHasher
+{
+    let len = set.len();
+    if len <= u {
+        return;
+    }
+    let removed: Vec<T> = set.iter().take(u - len).map(|v| v.clone()).collect();
+    for r in removed {
+        set.remove(&r);
+    }
 }
 
 impl Database {
@@ -95,8 +105,8 @@ impl Database {
         }
     }
 
-    pub fn get_all_feeds(&self) -> Vec<&Feed> {
-        self.feeds.iter().map(|(_, v)| v).collect()
+    pub fn get_all_feeds(&self) -> Vec<Feed> {
+        self.feeds.iter().map(|(_, v)| v.clone()).collect()
     }
 
     pub fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<&Feed>> {
@@ -105,6 +115,17 @@ impl Database {
                 .map(|feed_id| &self.feeds[feed_id])
                 .collect()
         })
+    }
+
+    pub fn inc_error_count(&mut self, rss_link: &str) -> u32 {
+        let feed_id = get_hash(rss_link);
+        self.feeds
+            .get_mut(&feed_id)
+            .map(|feed| {
+                feed.error_count += 1;
+                feed.error_count
+            })
+            .unwrap_or_default()
     }
 
     pub fn is_subscribed(&self, subscriber: SubscriberID, rss_link: &str) -> bool {
@@ -125,7 +146,7 @@ impl Database {
                     link: rss_link.to_owned(),
                     title: rss.title.to_owned(),
                     error_count: 0,
-                    hash_list: gen_hash_list(&rss.items),
+                    hash_list: rss.items.iter().map(gen_item_hash).collect(),
                     subscribers: HashSet::new(),
                 }
             });
@@ -169,6 +190,29 @@ impl Database {
         }
 
         self.save()
+    }
+
+    pub fn update<'a>(&mut self, rss_link: &str, items: Vec<rss::Item>) -> Vec<rss::Item> {
+        let feed_id = get_hash(rss_link);
+        let mut result = Vec::new();
+        let mut new_hash = Vec::new();
+        let items_len = items.len();
+        for item in items {
+            let hash = gen_item_hash(&item);
+            if !self.feeds[&feed_id].hash_list.contains(&hash) {
+                result.push(item);
+                new_hash.push(hash);
+            }
+        }
+        if !new_hash.is_empty() {
+            self.feeds.get_mut(&feed_id).map(|feed| {
+                truncate_hashset(&mut feed.hash_list, items_len * 2 - new_hash.len());
+                for hash in new_hash {
+                    feed.hash_list.insert(hash);
+                }
+            });
+        }
+        result
     }
 
     fn save(&mut self) -> Result<()> {

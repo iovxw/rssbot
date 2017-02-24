@@ -117,7 +117,7 @@ pub fn parse(s: &str) -> Result<rss::Channel> {
         })
 }
 
-pub fn fetch_feed<'a>(session: Session, link: &str) -> impl Future<Item = rss::Channel, Error = Error> + 'a {
+pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = rss::Channel, Error = Error> + 'a {
     let mut req = Easy::new();
     let buf = Arc::new(Mutex::new(Vec::new()));
     {
