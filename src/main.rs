@@ -37,6 +37,8 @@ mod utlis;
 use telebot_missing::{get_chat_string, edit_message_text};
 use utlis::Escape;
 
+const TELEGRAM_MAX_MSG_LEN: usize = 4096;
+
 fn log_error(e: &errors::Error) {
     warn!("error: {}", e);
     for e in e.iter().skip(1) {
@@ -164,11 +166,7 @@ fn to_chinese_error_msg(e: errors::Error) -> String {
         errors::Error(errors::ErrorKind::Curl(e), _) => format!("网络错误 ({})", e.into_error()),
         errors::Error(errors::ErrorKind::Utf8(e), _) => format!("编码错误 ({})", e),
         errors::Error(errors::ErrorKind::Xml(e), _) => {
-            let mut msg = format!("{}", e);
-            if msg.len() > 500 {
-                msg.truncate(500);
-                msg.push_str("...");
-            }
+            let msg = truncate_message(format!("{}", e), 500);
             format!("解析错误 ({})", msg)
         }
         _ => format!("{}", e),
@@ -177,6 +175,46 @@ fn to_chinese_error_msg(e: errors::Error) -> String {
 
 fn shoud_unsubscribe_for_user(tg_err_msg: &str) -> bool {
     tg_err_msg.contains("Forbidden") || tg_err_msg.contains("chat not found") || tg_err_msg.contains("group chat was migrated to a supergroup chat")
+}
+
+fn send_multiple_messages<'a>(bot: &telebot::RcBot, target: i64, messages: &[String]) -> impl Future<Item = (), Error = telebot::Error> + 'a {
+    let mut future: Box<Future<Item = telebot::RcBot, Error = telebot::Error>> = Box::new(futures::future::ok(bot.clone()));
+    for msg in messages {
+        let msg = msg.to_owned();
+        future = Box::new(future.and_then(move |bot| {
+            bot.message(target, msg)
+                .parse_mode("HTML")
+                .disable_web_page_preview(true)
+                .send()
+                .map(|(bot, _)| bot)
+        }));
+    }
+    future.map(|_| ())
+}
+
+fn truncate_message(mut s: String, max: usize) -> String {
+    if s.len() > max {
+        s.truncate(max - 3);
+        s.push_str("...");
+    }
+    s
+}
+
+fn format_and_split_msgs<T, F>(head: String, data: &[T], line_format_fn: F) -> Vec<String>
+    where F: Fn(&T) -> String
+{
+    let mut msgs = vec![head];
+    for item in data {
+        let line = line_format_fn(item);
+        if msgs.last_mut().unwrap().len() + line.len() > TELEGRAM_MAX_MSG_LEN {
+            msgs.push(line);
+        } else {
+            let msg = msgs.last_mut().unwrap();
+            msg.push('\n');
+            msg.push_str(&line);
+        }
+    }
+    msgs
 }
 
 fn fetch_feed_updates<'a>(bot: telebot::RcBot,
@@ -233,29 +271,27 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
         r.and_then(move |rss| {
             let updates = db.borrow_mut().update(&feed.link, rss.items);
             if updates.is_empty() {
-                Box::new(futures::future::err(()))
+                futures::future::err(())
             } else {
-                Box::new(futures::future::ok((bot, db, feed, rss.title, rss.link, updates)))
+                futures::future::ok((bot, db, feed, rss.title, rss.link, updates))
             }
         })
     };
     r.and_then(|(bot, db, feed, rss_title, rss_link, updates)| {
-        let mut msg = format!("<b>{}</b>", Escape(&rss_title));
-        for item in updates {
-            msg.push_str(&format!("\n<a href=\"{}\">{}</a>",
-                                  item.link.as_ref().unwrap_or_else(|| &rss_link),
-                                  Escape(&item.title.as_ref().unwrap_or_else(|| &rss_title))));
-        }
-        let mut msgs = Vec::with_capacity(feed.subscribers.len());
+        let msgs = format_and_split_msgs(format!("<b>{}</b>", rss_title), &updates, |item| {
+            let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_title);
+            let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_link);
+            format!("<a href=\"{}\">{}</a>",
+                    link,
+                    Escape(&truncate_message(title.to_owned(), TELEGRAM_MAX_MSG_LEN - 500)))
+        });
+
+        let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
         for &subscriber in &feed.subscribers {
-            let m = bot.message(subscriber, msg.clone())
-                .parse_mode("HTML")
-                .disable_web_page_preview(true)
-                .send();
             let feed_link = feed.link.clone();
             let db = db.clone();
             let bot = bot.clone();
-            let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+            let r = send_multiple_messages(&bot, subscriber, &msgs).map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
                 match e {
                     telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
                         db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
@@ -270,9 +306,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                     }
                 }
             });
-            msgs.push(r);
+            msg_futures.push(r);
         }
-        futures::future::join_all(msgs).then(|_| Ok(()))
+        futures::future::join_all(msg_futures).then(|_| Ok(()))
     })
 }
 
@@ -357,29 +393,25 @@ fn main() {
                     .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
             })
             .and_then(|(bot, db, subscriber, raw, chat_id)| {
-                let r = match db.borrow().get_subscribed_feeds(subscriber) {
+                let r: Box<Future<Item = _, Error = _>> = match db.borrow().get_subscribed_feeds(subscriber) {
                     Some(feeds) => {
-                        let mut text = String::from("订阅列表:");
+                        let text = String::from("订阅列表:");
                         if !raw {
-                            for feed in feeds {
-                                text.push_str(&format!("\n<a href=\"{}\">{}</a>", feed.link, Escape(&feed.title)));
-                            }
-                            bot.message(chat_id, text)
-                                .parse_mode("HTML")
-                                .disable_web_page_preview(true)
-                                .send()
+                            let msgs = format_and_split_msgs(text,
+                                                             &feeds,
+                                                             |feed| format!("<a href=\"{}\">{}</a>", feed.link, Escape(&feed.title)));
+                            Box::new(send_multiple_messages(&bot, chat_id, &msgs))
                         } else {
-                            for feed in feeds {
-                                text.push_str(&format!("\n{}: {}", feed.title, feed.link));
-                            }
-                            bot.message(chat_id, text)
-                                .disable_web_page_preview(true)
-                                .send()
+                            let msgs = format_and_split_msgs(text,
+                                                             &feeds,
+                                                             |feed| format!("{}: {}", Escape(&feed.title), Escape(&feed.link)));
+                            Box::new(send_multiple_messages(&bot, chat_id, &msgs))
                         }
                     }
                     None => {
-                        bot.message(chat_id, "订阅列表为空".to_string())
+                        Box::new(bot.message(chat_id, "订阅列表为空".to_string())
                             .send()
+                            .map(|_| ()))
                     }
                 };
                 r.map_err(|e| Some(e))
