@@ -39,11 +39,9 @@ fn gen_item_hash(item: &rss::Item) -> u64 {
         .as_ref()
         .map(|guid| get_hash(&guid.value))
         .unwrap_or_else(|| {
-            let default = "".to_string();
-            let title = item.title.as_ref().unwrap_or(&default);
-            let link = item.link.as_ref().unwrap_or(&default);
-            let string = String::with_capacity(title.len() + link.len());
-            get_hash(string)
+            let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_default();
+            let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_default();
+            get_hash(format!("{}{}", title, link))
         })
 }
 
