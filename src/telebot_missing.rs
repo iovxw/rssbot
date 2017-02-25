@@ -1,4 +1,4 @@
-#![warn(dead_code)]
+#![allow(dead_code)]
 
 use telebot;
 use serde_json;
