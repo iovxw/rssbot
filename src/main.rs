@@ -197,7 +197,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 for &subscriber in &feed.subscribers {
                     let m = bot.message(subscriber,
                                  format!("《<a href=\"{}\">{}</a>》已经连续 5 天拉取出错 ({})，可能已经关闭，请取消订阅",
-                                         Escape(&feed.link),
+                                         feed.link,
                                          Escape(&feed.title),
                                          Escape(&err_msg)))
                         .parse_mode("HTML")
@@ -243,7 +243,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
         let mut msg = format!("<b>{}</b>", Escape(&rss_title));
         for item in updates {
             msg.push_str(&format!("\n<a href=\"{}\">{}</a>",
-                                  Escape(&item.link.as_ref().unwrap_or_else(|| &rss_link)),
+                                  item.link.as_ref().unwrap_or_else(|| &rss_link),
                                   Escape(&item.title.as_ref().unwrap_or_else(|| &rss_title))));
         }
         let mut msgs = Vec::with_capacity(feed.subscribers.len());
@@ -362,9 +362,7 @@ fn main() {
                         let mut text = String::from("订阅列表:");
                         if !raw {
                             for feed in feeds {
-                                text.push_str(&format!("\n<a href=\"{}\">{}</a>",
-                                                       Escape(&feed.title),
-                                                       Escape(&feed.link)));
+                                text.push_str(&format!("\n<a href=\"{}\">{}</a>", feed.link, Escape(&feed.title)));
                             }
                             bot.message(chat_id, text)
                                 .parse_mode("HTML")
@@ -469,7 +467,7 @@ fn main() {
                     Ok(_) => {
                         bot.message(chat_id,
                                      format!("《<a href=\"{}\">{}</a>》订阅成功",
-                                             Escape(&feed.link),
+                                             feed.link,
                                              Escape(&feed.title)))
                             .parse_mode("HTML")
                             .disable_web_page_preview(true)
@@ -532,7 +530,15 @@ fn main() {
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id)| {
                 let r = match db.borrow_mut().unsubscribe(subscriber, &feed_link) {
-                    Ok(_) => bot.message(chat_id, "退订成功".to_string()).send(),
+                    Ok(feed) => {
+                        bot.message(chat_id,
+                                     format!("《<a href=\"{}\">{}</a>》退订成功",
+                                             feed.link,
+                                             Escape(&feed.title)))
+                            .parse_mode("HTML")
+                            .disable_web_page_preview(true)
+                            .send()
+                    }
                     Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => bot.message(chat_id, "未订阅过的 Feed".to_string()).send(),
                     Err(e) => {
                         log_error(&e);

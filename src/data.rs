@@ -155,7 +155,7 @@ impl Database {
         self.save()
     }
 
-    pub fn unsubscribe(&mut self, subscriber: SubscriberID, rss_link: &str) -> Result<()> {
+    pub fn unsubscribe(&mut self, subscriber: SubscriberID, rss_link: &str) -> Result<Feed> {
         let feed_id = get_hash(rss_link);
 
         {
@@ -173,23 +173,24 @@ impl Database {
                 self.subscribers.remove(&subscriber);
             }
         }
+        let result;
         {
             let mut clear_feed = false;
-            self.feeds
+            result = self.feeds
                 .get_mut(&feed_id)
                 .map(|feed| if !feed.subscribers.remove(&subscriber) {
-                    Err::<(), Error>(ErrorKind::NotSubscribed.into())
+                    Err::<Feed, Error>(ErrorKind::NotSubscribed.into())
                 } else {
                     clear_feed = feed.subscribers.len() == 0;
-                    Ok(())
+                    Ok(feed.clone())
                 })
                 .unwrap_or(Err(ErrorKind::NotSubscribed.into()))?;
             if clear_feed {
                 self.feeds.remove(&feed_id);
             }
         }
-
-        self.save()
+        self.save()?;
+        Ok(result)
     }
 
     pub fn update<'a>(&mut self, rss_link: &str, items: Vec<rss::Item>) -> Vec<rss::Item> {
@@ -212,6 +213,7 @@ impl Database {
                 }
             });
         }
+        self.save().unwrap_or_default();
         result
     }
 
