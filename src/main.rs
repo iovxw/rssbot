@@ -294,7 +294,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
             let r = send_multiple_messages(&bot, subscriber, &msgs).map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
                 match e {
                     telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
-                        db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
+                        if let Err(e) = db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                            log_error(&e);
+                        }
                         Box::new(bot.message(subscriber,
                                      format!("无法修复的错误 ({})，自动退订", s))
                             .send()
@@ -593,7 +595,7 @@ fn main() {
         let handle = lp.handle();
         let bot = bot.clone();
         lp.handle().spawn(Interval::new(Duration::from_secs(10), &lp.handle())
-            .unwrap()
+            .expect("failed to start feed loop")
             .for_each(move |_| {
                 let feeds = db.borrow().get_all_feeds();
                 for feed in feeds {
