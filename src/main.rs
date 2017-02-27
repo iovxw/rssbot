@@ -223,11 +223,12 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                           feed: data::Feed)
                           -> impl Future<Item = (), Error = ()> + 'a {
     info!("fetching: {} {}", feed.title, feed.link);
-    let r = {
-        let db = db.clone();
-        let bot = bot.clone();
-        let feed = feed.clone();
-        feed::fetch_feed(&session, &feed.link).or_else(move |e| -> Box<Future<Item = rss::Channel, Error = ()>> {
+    let bot_ = bot.clone();
+    let db_ = db.clone();
+    let feed_ = feed.clone();
+    feed::fetch_feed(&session, &feed.link)
+        .map(move |rss| (bot_, db_, rss, feed_))
+        .or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
             if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
                 // 1440 * 5 minute = 5 days
                 let err_msg = to_chinese_error_msg(e);
@@ -247,7 +248,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                     let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
                         match e {
                             telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
-                                db.borrow_mut().unsubscribe(subscriber, &feed_link).unwrap();
+                                if let Err(e) = db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                                    log_error(&e);
+                                }
                                 Box::new(bot.message(subscriber,
                                              format!("无法修复的错误 ({})，自动退订", s))
                                     .send()
@@ -263,12 +266,10 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 }
                 Box::new(futures::future::join_all(msgs).then(|_| Err(())))
             } else {
-                futures::future::err(()).boxed()
+                Box::new(futures::future::err(()))
             }
         })
-    };
-    let r = {
-        r.and_then(move |rss| {
+        .and_then(|(bot, db, rss, feed)| {
             let updates = db.borrow_mut().update(&feed.link, rss.items);
             if updates.is_empty() {
                 futures::future::err(())
@@ -276,42 +277,41 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 futures::future::ok((bot, db, feed, rss.title, rss.link, updates))
             }
         })
-    };
-    r.and_then(|(bot, db, feed, rss_title, rss_link, updates)| {
-        let msgs = format_and_split_msgs(format!("<b>{}</b>", rss_title), &updates, |item| {
-            let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_title);
-            let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_link);
-            format!("<a href=\"{}\">{}</a>",
-                    link,
-                    Escape(&truncate_message(title.to_owned(), TELEGRAM_MAX_MSG_LEN - 500)))
-        });
-
-        let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
-        for &subscriber in &feed.subscribers {
-            let feed_link = feed.link.clone();
-            let db = db.clone();
-            let bot = bot.clone();
-            let r = send_multiple_messages(&bot, subscriber, &msgs).map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
-                match e {
-                    telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
-                        if let Err(e) = db.borrow_mut().unsubscribe(subscriber, &feed_link) {
-                            log_error(&e);
-                        }
-                        Box::new(bot.message(subscriber,
-                                     format!("无法修复的错误 ({})，自动退订", s))
-                            .send()
-                            .then(|_| Ok(())))
-                    }
-                    _ => {
-                        warn!("failed to send updates to {}, {:?}", subscriber, e);
-                        futures::future::ok(()).boxed()
-                    }
-                }
+        .and_then(|(bot, db, feed, rss_title, rss_link, updates)| {
+            let msgs = format_and_split_msgs(format!("<b>{}</b>", rss_title), &updates, |item| {
+                let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_title);
+                let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_link);
+                format!("<a href=\"{}\">{}</a>",
+                        link,
+                        Escape(&truncate_message(title.to_owned(), TELEGRAM_MAX_MSG_LEN - 500)))
             });
-            msg_futures.push(r);
-        }
-        futures::future::join_all(msg_futures).then(|_| Ok(()))
-    })
+
+            let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
+            for &subscriber in &feed.subscribers {
+                let feed_link = feed.link.clone();
+                let db = db.clone();
+                let bot = bot.clone();
+                let r = send_multiple_messages(&bot, subscriber, &msgs).map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+                    match e {
+                        telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
+                            if let Err(e) = db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                                log_error(&e);
+                            }
+                            Box::new(bot.message(subscriber,
+                                         format!("无法修复的错误 ({})，自动退订", s))
+                                .send()
+                                .then(|_| Ok(())))
+                        }
+                        _ => {
+                            warn!("failed to send updates to {}, {:?}", subscriber, e);
+                            futures::future::ok(()).boxed()
+                        }
+                    }
+                });
+                msg_futures.push(r);
+            }
+            futures::future::join_all(msg_futures).then(|_| Ok(()))
+        })
 }
 
 fn main() {
@@ -383,8 +383,6 @@ fn main() {
                             }))
                     }
                 }
-
-                let bot = bot.clone();
                 let db = db.clone();
                 let chat_id = msg.chat.id;
                 Box::new(subscriber.then(|result| match result {
@@ -456,8 +454,6 @@ fn main() {
                             }))
                     }
                 }
-
-                let bot = bot.clone();
                 let db = db.clone();
                 let feed_link = feed_link.to_owned();
                 let chat_id = msg.chat.id;
@@ -551,7 +547,6 @@ fn main() {
                             }))
                     }
                 }
-                let bot = bot.clone();
                 let db = db.clone();
                 let feed_link = feed_link.to_owned();
                 let chat_id = msg.chat.id;
