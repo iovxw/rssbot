@@ -232,6 +232,7 @@ pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = RSS, 
         req.get(true).unwrap();
         req.url(link).unwrap();
         req.accept_encoding("").unwrap(); // accept all encoding
+        req.useragent("RSSBot/1.0 (https://github.com/iovxw/rssbot)").unwrap();
         req.follow_location(true).unwrap();
         req.timeout(Duration::from_secs(10)).unwrap();
         req.write_function(move |data| {
