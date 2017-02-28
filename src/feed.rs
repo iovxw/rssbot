@@ -23,15 +23,15 @@ fn parse_atom_link<B: std::io::BufRead>(reader: &mut XmlReader<B>, attributes: A
     for attribute in attributes {
         match attribute {
             Ok(attribute) => {
-                match attribute.key {
-                    b"href" => {
+                match reader.decode(attribute.key).as_ref() {
+                    "href" => {
                         match attribute.unescape_and_decode_value(reader) {
                             Ok(link) => link_tmp = Some(link),
                             Err(_) => continue,
                         }
                     }
-                    b"rel" => {
-                        is_alternate = attribute.value == b"alternate";
+                    "rel" => {
+                        is_alternate = reader.decode(attribute.value).as_ref() == "alternate";
                     }
                     _ => (),
                 }
@@ -73,7 +73,7 @@ impl FromXml for Option<String> {
                     content = Some(text);
                 }
                 Ok(XmlEvent::CData(ref e)) => {
-                    let text = e.unescape_and_decode(&reader)?;
+                    let text = reader.decode(&e).as_ref().to_owned();
                     content = Some(text);
                 }
                 Ok(XmlEvent::End(_)) => break,
@@ -101,8 +101,8 @@ impl FromXml for RSS {
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
-                    match e.name() {
-                        b"link" => {
+                    match reader.decode(e.name()).as_ref() {
+                        "link" => {
                             if let Some(link) = parse_atom_link(reader, e.attributes()) {
                                 rss.link = link;
                             }
@@ -111,13 +111,13 @@ impl FromXml for RSS {
                     }
                 }
                 Ok(XmlEvent::Start(ref e)) => {
-                    match e.name() {
-                        b"title" => {
+                    match reader.decode(e.name()).as_ref() {
+                        "title" => {
                             if let Some(title) = Option::from_xml(reader, e)? {
                                 rss.title = title;
                             }
                         }
-                        b"link" => {
+                        "link" => {
                             if let Some(link) = Option::from_xml(reader, e)? {
                                 // RSS
                                 rss.link = link;
@@ -128,7 +128,7 @@ impl FromXml for RSS {
                                 }
                             }
                         }
-                        b"item" | b"entry" => {
+                        "item" | "entry" => {
                             rss.items.push(Item::from_xml(reader, e)?);
                         }
                         _ => skip_element(reader)?,
@@ -159,8 +159,8 @@ impl FromXml for Item {
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
-                    match e.name() {
-                        b"link" => {
+                    match reader.decode(e.name()).as_ref() {
+                        "link" => {
                             if let Some(link) = parse_atom_link(reader, e.attributes()) {
                                 item.link = Some(link);
                             }
@@ -169,11 +169,11 @@ impl FromXml for Item {
                     }
                 }
                 Ok(XmlEvent::Start(ref e)) => {
-                    match e.name() {
-                        b"title" => {
+                    match reader.decode(e.name()).as_ref() {
+                        "title" => {
                             item.title = Option::from_xml(reader, e)?;
                         }
-                        b"link" => {
+                        "link" => {
                             if let Some(link) = Option::from_xml(reader, e)? {
                                 // RSS
                                 item.link = Some(link);
@@ -184,7 +184,7 @@ impl FromXml for Item {
                                 }
                             }
                         }
-                        b"id" | b"guid" => {
+                        "id" | "guid" => {
                             item.id = Option::from_xml(reader, e)?;
                         }
                         _ => skip_element(reader)?,
@@ -208,9 +208,9 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
     loop {
         match reader.read_event(&mut buf) {
             Ok(XmlEvent::Start(ref e)) => {
-                match e.name() {
-                    b"rss" => continue,
-                    b"channel" | b"feed" => {
+                match reader.decode(e.name()).as_ref() {
+                    "rss" => continue,
+                    "channel" | "feed" => {
                         return RSS::from_xml(&mut reader, e);
                     }
                     _ => skip_element(&mut reader)?,
