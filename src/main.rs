@@ -596,7 +596,8 @@ fn main() {
         let session = Session::new(lp.handle());
         let handle = lp.handle();
         let bot = bot.clone();
-        lp.handle().spawn(Interval::new(Duration::from_secs(10), &lp.handle())
+        // 5 minute
+        lp.handle().spawn(Interval::new(Duration::from_secs(300), &lp.handle())
             .expect("failed to start feed loop")
             .for_each(move |_| {
                 let feeds = db.borrow().get_all_feeds();

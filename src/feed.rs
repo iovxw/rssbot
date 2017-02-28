@@ -100,6 +100,16 @@ impl FromXml for RSS {
         let mut rss = RSS::default();
         loop {
             match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Empty(ref e)) => {
+                    match e.name() {
+                        b"link" => {
+                            if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                                rss.link = link;
+                            }
+                        }
+                        _ => (),
+                    }
+                }
                 Ok(XmlEvent::Start(ref e)) => {
                     match e.name() {
                         b"title" => {
@@ -148,6 +158,16 @@ impl FromXml for Item {
         let mut item = Item::default();
         loop {
             match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Empty(ref e)) => {
+                    match e.name() {
+                        b"link" => {
+                            if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                                item.link = Some(link);
+                            }
+                        }
+                        _ => (),
+                    }
+                }
                 Ok(XmlEvent::Start(ref e)) => {
                     match e.name() {
                         b"title" => {
