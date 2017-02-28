@@ -10,7 +10,7 @@
 
 ## 编译
 
-先安装 *Rust Nightly* 以及 *Cargo* (推荐使用 `[rustup](https://www.rustup.rs/)`), 然后:
+先安装 *Rust Nightly* 以及 *Cargo* (推荐使用 [`rustup`](https://www.rustup.rs/)), 然后:
 
 ```
 cargo build --release
