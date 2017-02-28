@@ -9,8 +9,6 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate quick_xml;
-extern crate rss;
-extern crate atom_syndication as atom;
 extern crate curl;
 extern crate futures;
 extern crate tokio_core;
@@ -35,7 +33,7 @@ mod telebot_missing;
 mod utlis;
 
 use telebot_missing::{get_chat_string, edit_message_text};
-use utlis::Escape;
+use utlis::{Escape, EscapeUrl};
 
 const TELEGRAM_MAX_MSG_LEN: usize = 4096;
 
@@ -166,7 +164,8 @@ fn to_chinese_error_msg(e: errors::Error) -> String {
         errors::Error(errors::ErrorKind::Curl(e), _) => format!("网络错误 ({})", e.into_error()),
         errors::Error(errors::ErrorKind::Utf8(e), _) => format!("编码错误 ({})", e),
         errors::Error(errors::ErrorKind::Xml(e), _) => {
-            let msg = truncate_message(format!("{}", e), 500);
+            let s = e.to_string();
+            let msg = truncate_message(&s, 500);
             format!("解析错误 ({})", msg)
         }
         _ => format!("{}", e),
@@ -192,12 +191,12 @@ fn send_multiple_messages<'a>(bot: &telebot::RcBot, target: i64, messages: &[Str
     future.map(|_| ())
 }
 
-fn truncate_message(mut s: String, max: usize) -> String {
-    if s.len() > max {
-        s.truncate(max - 3);
-        s.push_str("...");
+fn truncate_message(s: &str, max: usize) -> String {
+    if s.chars().count() > max {
+        format!("{:.1$}", s, max - 3)
+    } else {
+        s.to_owned()
     }
-    s
 }
 
 fn format_and_split_msgs<T, F>(head: String, data: &[T], line_format_fn: F) -> Vec<String>
@@ -236,7 +235,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 for &subscriber in &feed.subscribers {
                     let m = bot.message(subscriber,
                                  format!("《<a href=\"{}\">{}</a>》已经连续 5 天拉取出错 ({})，可能已经关闭，请取消订阅",
-                                         feed.link,
+                                         EscapeUrl(&feed.link),
                                          Escape(&feed.title),
                                          Escape(&err_msg)))
                         .parse_mode("HTML")
@@ -282,8 +281,8 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_title);
                 let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(|| &rss_link);
                 format!("<a href=\"{}\">{}</a>",
-                        link,
-                        Escape(&truncate_message(title.to_owned(), TELEGRAM_MAX_MSG_LEN - 500)))
+                        EscapeUrl(link),
+                        Escape(&truncate_message(title, TELEGRAM_MAX_MSG_LEN - 500)))
             });
 
             let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
@@ -397,9 +396,11 @@ fn main() {
                     Some(feeds) => {
                         let text = String::from("订阅列表:");
                         if !raw {
-                            let msgs = format_and_split_msgs(text,
-                                                             &feeds,
-                                                             |feed| format!("<a href=\"{}\">{}</a>", feed.link, Escape(&feed.title)));
+                            let msgs = format_and_split_msgs(text, &feeds, |feed| {
+                                format!("<a href=\"{}\">{}</a>",
+                                        EscapeUrl(&feed.link),
+                                        Escape(&feed.title))
+                            });
                             Box::new(send_multiple_messages(&bot, chat_id, &msgs))
                         } else {
                             let msgs = format_and_split_msgs(text,
@@ -417,9 +418,11 @@ fn main() {
                 r.map_err(|e| Some(e))
             })
             .then(|result| match result {
-                Ok(_) => Ok(()),
-                Err(None) => Ok(()),
-                Err(Some(err)) => Err(err),
+                Err(Some(err)) => {
+                    error!("telebot: {:?}", err);
+                    Ok::<(), ()>(())
+                }
+                _ => Ok(()),
             });
 
         bot.register(handle);
@@ -497,7 +500,7 @@ fn main() {
                     Ok(_) => {
                         bot.message(chat_id,
                                      format!("《<a href=\"{}\">{}</a>》订阅成功",
-                                             feed.link,
+                                             EscapeUrl(&feed.link),
                                              Escape(&feed.title)))
                             .parse_mode("HTML")
                             .disable_web_page_preview(true)
@@ -511,9 +514,11 @@ fn main() {
                 r.map_err(|e| Some(e))
             })
             .then(|result| match result {
-                Ok(_) => Ok(()),
-                Err(None) => Ok(()),
-                Err(Some(err)) => Err(err),
+                Err(Some(err)) => {
+                    error!("telebot: {:?}", err);
+                    Ok::<(), ()>(())
+                }
+                _ => Ok(()),
             });
 
         bot.register(handle);
@@ -562,7 +567,7 @@ fn main() {
                     Ok(feed) => {
                         bot.message(chat_id,
                                      format!("《<a href=\"{}\">{}</a>》退订成功",
-                                             feed.link,
+                                             EscapeUrl(&feed.link),
                                              Escape(&feed.title)))
                             .parse_mode("HTML")
                             .disable_web_page_preview(true)
@@ -577,9 +582,11 @@ fn main() {
                 r.map_err(|e| Some(e))
             })
             .then(|result| match result {
-                Ok(_) => Ok(()),
-                Err(None) => Ok(()),
-                Err(Some(err)) => Err(err),
+                Err(Some(err)) => {
+                    error!("telebot: {:?}", err);
+                    Ok::<(), ()>(())
+                }
+                _ => Ok(()),
             });
 
         bot.register(handle);

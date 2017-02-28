@@ -1,129 +1,217 @@
+use std;
 use std::str;
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use std::time::Duration;
 
 use curl::easy::Easy;
 use futures::Future;
 use tokio_curl::Session;
-use rss;
-use atom;
+use quick_xml::events::BytesStart;
+use quick_xml::events::Event as XmlEvent;
+use quick_xml::events::attributes::Attributes;
+use quick_xml::reader::Reader as XmlReader;
 
 use errors::*;
 
-fn atom_categories_to_rss_categories(categories: Vec<atom::Category>) -> Vec<rss::Category> {
-    let mut result = Vec::with_capacity(categories.len());
-    for category in categories {
-        result.push(rss::Category {
-            name: category.term,
-            domain: category.scheme,
-        });
-    }
-    result
+pub trait FromXml: Sized {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, start: &BytesStart) -> Result<Self>;
 }
 
-fn atom_links_to_rss_link(mut links: Vec<atom::Link>) -> Option<String> {
-    links.pop().map(|link| link.href)
-}
-
-fn atom_authors_to_rss_author(mut authors: Vec<atom::Person>) -> Option<String> {
-    authors.pop().map(|author| author.name)
-}
-
-fn atom_entries_to_rss_items(entries: Vec<atom::Entry>) -> Vec<rss::Item> {
-    let mut result = Vec::with_capacity(entries.len());
-    for entry in entries {
-        result.push(rss::Item {
-            title: Some(entry.title),
-            link: atom_links_to_rss_link(entry.links),
-            description: entry.summary,
-            author: atom_authors_to_rss_author(entry.authors),
-            categories: atom_categories_to_rss_categories(entry.categories),
-            comments: None,
-            enclosure: None,
-            guid: Some(rss::Guid {
-                value: entry.id,
-                is_permalink: false,
-            }),
-            pub_date: Some(entry.updated),
-            source: entry.source.map(|source| {
-                rss::Source {
-                    url: atom_links_to_rss_link(source.links).unwrap_or_default(),
-                    title: source.title,
-                }
-            }),
-            content: entry.content.map(|content| match content {
-                atom::Content::Text(s) |
-                atom::Content::Html(s) => s,
-                atom::Content::Xhtml(x) => x.content_str(),
-            }),
-            extensions: HashMap::new(),
-            itunes_ext: None,
-            dublin_core_ext: None,
-        });
-    }
-    result
-}
-
-fn feed_to_channel(feed: atom::Feed) -> rss::Channel {
-    rss::Channel {
-        title: feed.title,
-        link: atom_links_to_rss_link(feed.links).unwrap_or(feed.id),
-        description: feed.subtitle.unwrap_or_default(),
-        language: None,
-        copyright: feed.rights,
-        managing_editor: None,
-        webmaster: None,
-        pub_date: None,
-        last_build_date: Some(feed.updated),
-        categories: atom_categories_to_rss_categories(feed.categories),
-        generator: feed.generator.map(|generator| generator.name),
-        docs: None,
-        cloud: None,
-        ttl: None,
-        image: None,
-        text_input: None,
-        skip_hours: Vec::new(),
-        skip_days: Vec::new(),
-        items: atom_entries_to_rss_items(feed.entries),
-        extensions: HashMap::new(),
-        itunes_ext: None,
-        dublin_core_ext: None,
-        namespaces: HashMap::new(),
-    }
-}
-
-pub fn parse(s: &str) -> Result<rss::Channel> {
-    s.parse::<rss::Channel>()
-        .or_else(|rss_err| match rss_err {
-            rss::Error::Xml(err) |
-            rss::Error::XmlParsing(err, _) => Err(ErrorKind::Xml(err).into()),
-            _ => {
-                if s.contains("<channel>") {
-                    Err(format!("{}", rss_err).into())
-                } else {
-                    s.parse::<atom::Feed>()
-                        .map(feed_to_channel)
-                        .map_err(|atom_err| if s.contains("<entry>") {
-                            atom_err.into()
-                        } else {
-                            match rss_err {
-                                rss::Error::EOF => ErrorKind::EOF.into(),
-                                _ => ErrorKind::Unknown(format!("{}", rss_err)).into(),
-                            }
-                        })
+fn parse_atom_link<B: std::io::BufRead>(reader: &mut XmlReader<B>, attributes: Attributes) -> Option<String> {
+    let mut link_tmp = None;
+    let mut is_alternate = true;
+    for attribute in attributes {
+        match attribute {
+            Ok(attribute) => {
+                match attribute.key {
+                    b"href" => {
+                        match attribute.unescape_and_decode_value(reader) {
+                            Ok(link) => link_tmp = Some(link),
+                            Err(_) => continue,
+                        }
+                    }
+                    b"rel" => {
+                        is_alternate = attribute.value == b"alternate";
+                    }
+                    _ => (),
                 }
             }
-        })
+            Err(_) => continue,
+        }
+    }
+    if is_alternate { link_tmp } else { None }
 }
 
-pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = rss::Channel, Error = Error> + 'a {
+fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(XmlEvent::Start(_)) => {
+                skip_element(reader)?;
+            }
+            Ok(XmlEvent::End(_)) => break,
+            Ok(XmlEvent::Eof) => break,
+            Err(err) => return Err(err.into()),
+            _ => (),
+        }
+        buf.clear();
+    }
+    Ok(())
+}
+
+impl FromXml for Option<String> {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, _start: &BytesStart) -> Result<Self> {
+        let mut buf = Vec::new();
+        let mut content: Option<String> = None;
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(_)) => {
+                    skip_element(reader)?;
+                }
+                Ok(XmlEvent::Text(ref e)) => {
+                    let text = e.unescape_and_decode(&reader)?;
+                    content = Some(text);
+                }
+                Ok(XmlEvent::CData(ref e)) => {
+                    let text = e.unescape_and_decode(&reader)?;
+                    content = Some(text);
+                }
+                Ok(XmlEvent::End(_)) => break,
+                Ok(XmlEvent::Eof) => break,
+                Err(err) => return Err(err.into()),
+                _ => (),
+            }
+            buf.clear();
+        }
+        Ok(content)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RSS {
+    pub title: String,
+    pub link: String,
+    pub items: Vec<Item>,
+}
+
+impl FromXml for RSS {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, _start: &BytesStart) -> Result<Self> {
+        let mut buf = Vec::new();
+        let mut rss = RSS::default();
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(ref e)) => {
+                    match e.name() {
+                        b"title" => {
+                            if let Some(title) = Option::from_xml(reader, e)? {
+                                rss.title = title;
+                            }
+                        }
+                        b"link" => {
+                            if let Some(link) = Option::from_xml(reader, e)? {
+                                // RSS
+                                rss.link = link;
+                            } else {
+                                // ATOM
+                                if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                                    rss.link = link;
+                                }
+                            }
+                        }
+                        b"item" | b"entry" => {
+                            rss.items.push(Item::from_xml(reader, e)?);
+                        }
+                        _ => skip_element(reader)?,
+                    }
+                }
+                Ok(XmlEvent::End(_)) => break,
+                Ok(XmlEvent::Eof) => break,
+                Err(err) => return Err(err.into()),
+                _ => (),
+            }
+            buf.clear();
+        }
+        Ok(rss)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Item {
+    pub title: Option<String>,
+    pub link: Option<String>,
+    pub id: Option<String>,
+}
+
+impl FromXml for Item {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, _start: &BytesStart) -> Result<Self> {
+        let mut buf = Vec::new();
+        let mut item = Item::default();
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(ref e)) => {
+                    match e.name() {
+                        b"title" => {
+                            item.title = Option::from_xml(reader, e)?;
+                        }
+                        b"link" => {
+                            if let Some(link) = Option::from_xml(reader, e)? {
+                                // RSS
+                                item.link = Some(link);
+                            } else {
+                                // ATOM
+                                if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                                    item.link = Some(link);
+                                }
+                            }
+                        }
+                        b"id" | b"guid" => {
+                            item.id = Option::from_xml(reader, e)?;
+                        }
+                        _ => skip_element(reader)?,
+                    }
+                }
+                Ok(XmlEvent::End(_)) => break,
+                Ok(XmlEvent::Eof) => break,
+                Err(err) => return Err(err.into()),
+                _ => (),
+            }
+            buf.clear();
+        }
+        Ok(item)
+    }
+}
+
+pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
+    let mut reader = XmlReader::from_reader(reader);
+    reader.trim_text(true);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(XmlEvent::Start(ref e)) => {
+                match e.name() {
+                    b"rss" => continue,
+                    b"channel" | b"feed" => {
+                        return RSS::from_xml(&mut reader, e);
+                    }
+                    _ => skip_element(&mut reader)?,
+                }
+            }
+            Ok(XmlEvent::Eof) => return Err(ErrorKind::EOF.into()),
+            Err(err) => return Err(err.into()),
+            _ => (),
+        }
+        buf.clear();
+    }
+}
+
+pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = RSS, Error = Error> + 'a {
     let mut req = Easy::new();
     let buf = Arc::new(Mutex::new(Vec::new()));
     {
         let buf = buf.clone();
         req.get(true).unwrap();
         req.url(link).unwrap();
+        req.accept_encoding("").unwrap(); // accept all encoding
         req.follow_location(true).unwrap();
         req.timeout(Duration::from_secs(10)).unwrap();
         req.write_function(move |data| {
@@ -137,7 +225,7 @@ pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = rss::
         if response_code != 200 {
             return Err(ErrorKind::Http(response_code).into());
         }
-        let s = String::from(str::from_utf8(&buf.lock().unwrap())?);
-        parse(&s)
+        let buf = buf.lock().unwrap();
+        parse(buf.as_slice())
     })
 }

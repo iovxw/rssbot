@@ -7,12 +7,10 @@ authors = ["iovxw <iovxw@outlook.com>"]
 log = "0.3"
 env_logger = "0.3"
 error-chain = "0.9"
-atom_syndication = "0.3"
-
-rss = "0.4"
-quick-xml = "*" # version specified by rss
+quick-xml = "0.6"
 
 telebot = "0.1"
+# version specified by telebot
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

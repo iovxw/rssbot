@@ -4,9 +4,9 @@ use std::path::Path;
 use std::hash::{Hash, Hasher};
 use std::collections::{HashMap, HashSet};
 
-use rss;
 use serde_json;
 
+use feed;
 use errors::*;
 
 fn get_hash<T: Hash>(t: T) -> u64 {
@@ -34,10 +34,10 @@ pub struct Database {
     subscribers: HashMap<SubscriberID, HashSet<FeedID>>,
 }
 
-fn gen_item_hash(item: &rss::Item) -> u64 {
-    item.guid
+fn gen_item_hash(item: &feed::Item) -> u64 {
+    item.id
         .as_ref()
-        .map(|guid| get_hash(&guid.value))
+        .map(|id| get_hash(&id))
         .unwrap_or_else(|| {
             let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_default();
             let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_default();
@@ -130,7 +130,7 @@ impl Database {
         self.subscribers.get(&subscriber).map(|feeds| feeds.contains(&get_hash(rss_link))).unwrap_or(false)
     }
 
-    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &rss::Channel) -> Result<()> {
+    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &feed::RSS) -> Result<()> {
         let feed_id = get_hash(rss_link);
         {
             let subscribed_feeds = self.subscribers.entry(subscriber).or_insert_with(|| HashSet::new());
@@ -191,7 +191,7 @@ impl Database {
         Ok(result)
     }
 
-    pub fn update<'a>(&mut self, rss_link: &str, items: Vec<rss::Item>) -> Vec<rss::Item> {
+    pub fn update<'a>(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(rss_link);
         let mut result = Vec::new();
         let mut new_hash = Vec::new();

@@ -8,11 +8,6 @@ error_chain! {
             description("unexpected EOF")
         }
 
-        Unknown(s: String) {
-            description("unknown error")
-            display("unknown error: {}", s)
-        }
-
         Http(code: u32) {
             description("unexpected HTTP response code")
             display("HTTP {} ({})", code, response_code(*code).unwrap_or("Unknown"))
@@ -32,8 +27,10 @@ error_chain! {
             description("illegal database format")
         }
     }
+    links {
+        Xml(::quick_xml::errors::Error, ::quick_xml::errors::ErrorKind);
+    }
     foreign_links {
-        Xml(::quick_xml::error::Error);
         Curl(::tokio_curl::PerformError);
         Utf8(::std::str::Utf8Error);
     }
