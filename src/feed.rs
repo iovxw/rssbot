@@ -14,6 +14,10 @@ use regex::Regex;
 
 use errors::*;
 
+lazy_static! {
+    static ref HOST: Regex = Regex::new(r"^((?:https?://)?[^/]+)").unwrap();
+}
+
 pub trait FromXml: Sized {
     fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, start: &BytesStart) -> Result<Self>;
 }
@@ -88,7 +92,7 @@ impl FromXml for Option<String> {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RSS {
     pub title: String,
     pub link: String,
@@ -146,7 +150,7 @@ impl FromXml for RSS {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Item {
     pub title: Option<String>,
     pub link: Option<String>,
@@ -226,10 +230,7 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
 }
 
 fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
-    lazy_static! {
-        static ref HOST: Regex = Regex::new(r"^((?:https?:\/\/)?[^\/]+)").unwrap();
-    }
-    let rss_host = &HOST.captures(rss_link).unwrap()[0];
+    let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| r.get(0).unwrap().as_str());
     match rss.link.as_str() {
         "" => rss.link = rss_host.to_owned(),
         "/" => rss.link = rss_host.to_owned(),
@@ -280,4 +281,16 @@ pub fn fetch_feed<'a>(session: Session, link: String) -> impl Future<Item = RSS,
         let rss = parse(buf.as_slice())?;
         Ok(fix_relative_url(rss, &link))
     })
+}
+
+#[test]
+fn test_host_regex() {
+    assert!(HOST.captures("").is_none());
+    assert!(HOST.captures("/path").is_none());
+    assert_eq!(&HOST.captures("example.com/path").unwrap()[0],
+               "example.com");
+    assert_eq!(&HOST.captures("http://example.com/path").unwrap()[0],
+               "http://example.com");
+    assert_eq!(&HOST.captures("https://example.com/path").unwrap()[0],
+               "https://example.com");
 }
