@@ -229,24 +229,33 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
     }
 }
 
+fn set_url_relative_to_absolute(link: &mut String, host: &str) {
+    match link.as_str() {
+        _ if link.starts_with("//") => {
+            let mut s = String::from("http:");
+            s.push_str(link);
+            *link = s;
+        }
+        _ if link.starts_with("/") => {
+            let mut s = String::from(host);
+            s.push_str(link);
+            *link = s;
+        }
+        _ => (),
+    }
+}
+
 fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| r.get(0).unwrap().as_str());
     match rss.link.as_str() {
         "" => rss.link = rss_host.to_owned(),
         "/" => rss.link = rss_host.to_owned(),
-        _ => (),
+        _ => set_url_relative_to_absolute(&mut rss.link, rss_host),
     }
     for item in rss.items.iter_mut() {
         match item.link.as_mut() {
-            Some(ref mut link) if link.starts_with("//") => {
-                let mut s = String::from("http:");
-                s.push_str(*link);
-                **link = s;
-            }
-            Some(ref mut link) if link.starts_with("/") => {
-                let mut s = String::from(rss_host);
-                s.push_str(*link);
-                **link = s;
+            Some(link) => {
+                set_url_relative_to_absolute(link, rss_host);
             }
             _ => (),
         }
