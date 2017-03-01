@@ -237,7 +237,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let mut msgs = Vec::with_capacity(feed.subscribers.len());
                 for &subscriber in &feed.subscribers {
                     let m = bot.message(subscriber,
-                                 format!("《<a href=\"{}\">{}</a>》已经连续 5 天拉取出错 ({})，可能已经关闭，请取消订阅",
+                                 format!("《<a href=\"{}\">{}</a>》已经连续 5 天拉取出错 ({}), 可能已经关闭, 请取消订阅",
                                          EscapeUrl(&feed.link),
                                          Escape(&feed.title),
                                          Escape(&err_msg)))
@@ -254,7 +254,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                                     log_error(&e);
                                 }
                                 Box::new(bot.message(subscriber,
-                                             format!("无法修复的错误 ({})，自动退订", s))
+                                             format!("无法修复的错误 ({}), 自动退订", s))
                                     .send()
                                     .then(|_| Ok(())))
                             }
@@ -300,7 +300,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                                 log_error(&e);
                             }
                             Box::new(bot.message(subscriber,
-                                         format!("无法修复的错误 ({})，自动退订", s))
+                                         format!("无法修复的错误 ({}), 自动退订", s))
                                 .send()
                                 .then(|_| Ok(())))
                         }
@@ -377,7 +377,7 @@ fn main() {
                     }
                     _ => {
                         return Box::new(bot.message(msg.chat.id,
-                                     "使用方法： /rss <Channel ID> <raw>".to_string())
+                                     "使用方法: /rss <Channel ID> <raw>".to_string())
                             .send()
                             .then(|result| match result {
                                 Ok(_) => Err(None),
@@ -452,7 +452,7 @@ fn main() {
                     }
                     _ => {
                         return Box::new(bot.message(msg.chat.id,
-                                     "使用方法： /sub [Channel ID] <RSS URL>".to_string())
+                                     "使用方法: /sub [Channel ID] <RSS URL>".to_string())
                             .send()
                             .then(|result| match result {
                                 Ok(_) => Err(None),
@@ -547,7 +547,7 @@ fn main() {
                     }
                     _ => {
                         return Box::new(bot.message(msg.chat.id,
-                                     "使用方法： /unsub [Channel ID] <RSS URL>".to_string())
+                                     "使用方法: /unsub [Channel ID] <RSS URL>".to_string())
                             .send()
                             .then(|result| match result {
                                 Ok(_) => Err(None),
@@ -576,7 +576,7 @@ fn main() {
                             .disable_web_page_preview(true)
                             .send()
                     }
-                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => bot.message(chat_id, "未订阅过的 Feed".to_string()).send(),
+                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => bot.message(chat_id, "未订阅过的 RSS".to_string()).send(),
                     Err(e) => {
                         log_error(&e);
                         bot.message(chat_id, format!("error: {}", e)).send()
@@ -586,6 +586,62 @@ fn main() {
             })
             .then(|result| match result {
                 Err(Some(err)) => {
+                    error!("telebot: {:?}", err);
+                    Ok::<(), ()>(())
+                }
+                _ => Ok(()),
+            });
+
+        bot.register(handle);
+    }
+    {
+        let db = db.clone();
+        let handle = bot.new_cmd("/unsubthis")
+            .and_then(move |(bot, msg)| if let Some(ref reply_msg) = msg.reply_to_message {
+                if let Some(ref m) = reply_msg.text {
+                    if let Some(ref title) = m.lines().next() {
+                        if let Some(ref feed_link) =
+                            {
+                                let r = db.borrow()
+                                    .get_subscribed_feeds(msg.chat.id)
+                                    .unwrap_or_default()
+                                    .iter()
+                                    .filter(|feed| &feed.title == title)
+                                    .map(|feed| feed.link.clone())
+                                    .next();
+                                r
+                            } {
+                            match db.borrow_mut().unsubscribe(msg.chat.id, &feed_link) {
+                                Ok(feed) => {
+                                    bot.message(msg.chat.id,
+                                                 format!("《<a href=\"{}\">{}</a>》退订成功",
+                                                         EscapeUrl(&feed.link),
+                                                         Escape(&feed.title)))
+                                        .parse_mode("HTML")
+                                        .disable_web_page_preview(true)
+                                        .send()
+                                }
+                                Err(e) => {
+                                    log_error(&e);
+                                    bot.message(msg.chat.id, format!("error: {}", e)).send()
+                                }
+                            }
+                        } else {
+                            bot.message(msg.chat.id, "无法找到此订阅".to_string()).send()
+                        }
+                    } else {
+                        bot.message(msg.chat.id, "无法识别的消息".to_string()).send()
+                    }
+                } else {
+                    bot.message(msg.chat.id, "无法识别的消息".to_string()).send()
+                }
+            } else {
+                bot.message(msg.chat.id,
+                             "使用方法: 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel".to_string())
+                    .send()
+            })
+            .then(|result| match result {
+                Err(err) => {
                     error!("telebot: {:?}", err);
                     Ok::<(), ()>(())
                 }
