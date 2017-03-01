@@ -10,6 +10,7 @@ use quick_xml::events::BytesStart;
 use quick_xml::events::Event as XmlEvent;
 use quick_xml::events::attributes::Attributes;
 use quick_xml::reader::Reader as XmlReader;
+use regex::Regex;
 
 use errors::*;
 
@@ -224,13 +225,42 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
     }
 }
 
-pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = RSS, Error = Error> + 'a {
+fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
+    lazy_static! {
+        static ref HOST: Regex = Regex::new(r"^((?:https?:\/\/)?[^\/]+)").unwrap();
+    }
+    let rss_host = &HOST.captures(rss_link).unwrap()[0];
+    match rss.link.as_str() {
+        "" => rss.link = rss_host.to_owned(),
+        "/" => rss.link = rss_host.to_owned(),
+        _ => (),
+    }
+    for item in rss.items.iter_mut() {
+        match item.link.as_mut() {
+            Some(ref mut link) if link.starts_with("//") => {
+                let mut s = String::from("http:");
+                s.push_str(*link);
+                **link = s;
+            }
+            Some(ref mut link) if link.starts_with("/") => {
+                let mut s = String::from(rss_host);
+                s.push_str(*link);
+                **link = s;
+            }
+            _ => (),
+        }
+    }
+
+    rss
+}
+
+pub fn fetch_feed<'a>(session: Session, link: String) -> impl Future<Item = RSS, Error = Error> + 'a {
     let mut req = Easy::new();
     let buf = Arc::new(Mutex::new(Vec::new()));
     {
         let buf = buf.clone();
         req.get(true).unwrap();
-        req.url(link).unwrap();
+        req.url(&link).unwrap();
         req.accept_encoding("").unwrap(); // accept all encoding
         req.useragent("RSSBot/1.0 (https://github.com/iovxw/rssbot)").unwrap();
         req.follow_location(true).unwrap();
@@ -247,6 +277,7 @@ pub fn fetch_feed<'a>(session: &Session, link: &str) -> impl Future<Item = RSS, 
             return Err(ErrorKind::Http(response_code).into());
         }
         let buf = buf.lock().unwrap();
-        parse(buf.as_slice())
+        let rss = parse(buf.as_slice())?;
+        Ok(fix_relative_url(rss, &link))
     })
 }

@@ -8,6 +8,8 @@ log = "0.3"
 env_logger = "0.3"
 error-chain = "0.9"
 quick-xml = "0.6"
+lazy_static = "0.2"
+regex = "0.2"
 
 telebot = "0.1"
 # version specified by telebot

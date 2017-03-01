@@ -14,6 +14,9 @@ extern crate futures;
 extern crate tokio_core;
 extern crate tokio_curl;
 extern crate telebot;
+#[macro_use]
+extern crate lazy_static;
+extern crate regex;
 
 use std::io::prelude::*;
 use std::rc::Rc;
@@ -225,7 +228,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
     let bot_ = bot.clone();
     let db_ = db.clone();
     let feed_ = feed.clone();
-    feed::fetch_feed(&session, &feed.link)
+    feed::fetch_feed(session, feed.link.to_owned())
         .map(move |rss| (bot_, db_, rss, feed_))
         .or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
             if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
@@ -483,7 +486,7 @@ fn main() {
             .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
                 let session = Session::new(lphandle);
                 let bot2 = bot.clone();
-                feed::fetch_feed(&session, &feed_link)
+                feed::fetch_feed(session, feed_link.to_owned())
                     .map(move |feed| (bot2, db, subscriber, feed_link, chat_id, feed))
                     .or_else(move |e| {
                         bot.message(chat_id,
