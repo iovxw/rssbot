@@ -593,7 +593,6 @@ fn main() {
     }
 
     {
-        let session = Session::new(lp.handle());
         let handle = lp.handle();
         let bot = bot.clone();
         // 5 minute
@@ -601,6 +600,7 @@ fn main() {
             .expect("failed to start feed loop")
             .for_each(move |_| {
                 let feeds = db.borrow().get_all_feeds();
+                let session = Session::new(handle.clone());
                 for feed in feeds {
                     handle.spawn(fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed));
                 }
