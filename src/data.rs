@@ -221,3 +221,13 @@ impl Database {
         serde_json::to_writer(&mut file, &feeds_list).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
     }
 }
+
+#[test]
+fn test_truncate_hashset() {
+    let mut h = HashSet::new();
+    for i in 0..10 {
+        h.insert(i);
+    }
+    truncate_hashset(&mut h, 7);
+    assert_eq!(h.len(), 7);
+}
