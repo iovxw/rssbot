@@ -1,4 +1,4 @@
-# rssbot
+# rssbot ![Travis Build Status](https://travis-ci.org/iovxw/rssbot.svg)
 
 中文 Telegram RSS 机器人 [@RustRssBot](http://t.me/RustRssBot)
 
