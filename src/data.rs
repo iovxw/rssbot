@@ -53,7 +53,7 @@ fn truncate_hashset<T, S>(set: &mut HashSet<T, S>, u: usize)
     if len <= u {
         return;
     }
-    let removed: Vec<T> = set.iter().take(u - len).map(|v| v.clone()).collect();
+    let removed: Vec<T> = set.iter().take(len - u).map(|v| v.clone()).collect();
     for r in removed {
         set.remove(&r);
     }
