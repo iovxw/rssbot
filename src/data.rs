@@ -204,6 +204,12 @@ impl Database {
         result
     }
 
+    pub fn update_title(&mut self, rss_link: &str, new_title: &str) {
+        let feed_id = get_hash(rss_link);
+        self.feeds.get_mut(&feed_id).unwrap().title = new_title.to_owned();
+        self.save().unwrap_or_default();
+    }
+
     fn save(&mut self) -> Result<()> {
         let feeds_list: Vec<&Feed> = self.feeds.iter().map(|(_id, feed)| feed).collect();
         let mut file = File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;

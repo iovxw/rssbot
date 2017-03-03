@@ -272,6 +272,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
             }
         })
         .and_then(|(bot, db, rss, feed)| {
+            if rss.title != feed.title {
+                db.borrow_mut().update_title(&feed.link, &rss.title);
+            }
             let updates = db.borrow_mut().update(&feed.link, rss.items);
             if updates.is_empty() {
                 futures::future::err(())
