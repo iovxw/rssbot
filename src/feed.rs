@@ -117,6 +117,12 @@ impl FromXml for RSS {
                 }
                 Ok(XmlEvent::Start(ref e)) => {
                     match reader.decode(e.name()).as_ref() {
+                        "channel" => {
+                            // RDF
+                            let rdf = RSS::from_xml(reader, e)?;
+                            rss.title = rdf.title;
+                            rss.link = rdf.link;
+                        }
                         "title" => {
                             if let Some(title) = Option::from_xml(reader, e)? {
                                 rss.title = title;
@@ -215,7 +221,7 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
             Ok(XmlEvent::Start(ref e)) => {
                 match reader.decode(e.name()).as_ref() {
                     "rss" => continue,
-                    "channel" | "feed" => {
+                    "channel" | "feed" | "rdf:RDF" => {
                         return RSS::from_xml(&mut reader, e);
                     }
                     _ => skip_element(&mut reader)?,
