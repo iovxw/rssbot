@@ -45,20 +45,6 @@ fn gen_item_hash(item: &feed::Item) -> u64 {
         })
 }
 
-fn truncate_hashset<T, S>(set: &mut HashSet<T, S>, u: usize)
-    where T: std::hash::Hash + Clone + Eq,
-          S: std::hash::BuildHasher
-{
-    let len = set.len();
-    if len <= u {
-        return;
-    }
-    let removed: Vec<T> = set.iter().take(len - u).map(|v| v.clone()).collect();
-    for r in removed {
-        set.remove(&r);
-    }
-}
-
 impl Database {
     pub fn create(path: &str) -> Result<Database> {
         let feeds: HashMap<FeedID, Feed> = HashMap::new();
@@ -194,22 +180,25 @@ impl Database {
     pub fn update<'a>(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(rss_link);
         let mut result = Vec::new();
-        let mut new_hash = Vec::new();
+        let mut new_hash_list = HashSet::new();
         let items_len = items.len();
         for item in items {
             let hash = gen_item_hash(&item);
+            new_hash_list.insert(hash);
             if !self.feeds[&feed_id].hash_list.contains(&hash) {
                 result.push(item);
-                new_hash.push(hash);
             }
         }
-        if !new_hash.is_empty() {
-            self.feeds.get_mut(&feed_id).map(|feed| {
-                truncate_hashset(&mut feed.hash_list, items_len * 2 - new_hash.len());
-                for hash in new_hash {
-                    feed.hash_list.insert(hash);
+        if !result.is_empty() {
+            let max_size = items_len * 2;
+            let feed = self.feeds.get_mut(&feed_id).unwrap();
+            for old_hash in &feed.hash_list {
+                new_hash_list.insert(*old_hash);
+                if new_hash_list.len() >= max_size {
+                    break;
                 }
-            });
+            }
+            feed.hash_list = new_hash_list;
         }
         self.save().unwrap_or_default();
         result
@@ -220,14 +209,4 @@ impl Database {
         let mut file = File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;
         serde_json::to_writer(&mut file, &feeds_list).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
     }
-}
-
-#[test]
-fn test_truncate_hashset() {
-    let mut h = HashSet::new();
-    for i in 0..10 {
-        h.insert(i);
-    }
-    truncate_hashset(&mut h, 7);
-    assert_eq!(h.len(), 7);
 }
