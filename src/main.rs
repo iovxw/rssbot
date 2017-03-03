@@ -196,7 +196,7 @@ fn send_multiple_messages<'a>(bot: &telebot::RcBot, target: i64, messages: &[Str
 
 fn truncate_message(s: &str, max: usize) -> String {
     if s.chars().count() > max {
-        format!("{:.1$}", s, max - 3)
+        format!("{:.1$}...", s, max - 3)
     } else {
         s.to_owned()
     }
