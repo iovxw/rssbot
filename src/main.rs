@@ -48,7 +48,11 @@ fn log_error(e: &errors::Error) {
     }
 }
 
-fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: i64) -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
+fn check_channel<'a>(bot: telebot::RcBot,
+                     channel: &str,
+                     chat_id: i64,
+                     user_id: i64)
+                     -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
     let channel = channel.parse::<i64>()
         .map(|_| if !channel.starts_with("-100") {
             format!("-100{}", channel)
@@ -72,7 +76,8 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                         telebot::Error::Telegram(err_msg) => {
                             Box::new(bot.edit_message_text(chat_id,
                                                    msg_id,
-                                                   format!("无法找到目标 Channel: {}", err_msg))
+                                                           format!("无法找到目标 Channel: {}",
+                                                                   err_msg))
                                 .send()
                                 .then(|result| match result {
                                     Ok(_) => futures::future::err(None),
@@ -99,10 +104,13 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                     .or_else(move |e| -> Box<Future<Item = _, Error = Option<_>>> {
                         match e {
                             telebot::Error::Telegram(error_msg) => {
-                                Box::new(bot.edit_message_text(chat_id,
-                                                       msg_id,
-                                                       format!("请先将本 Bot 加入目标 Channel 并设为管理员: {}",
-                                                               error_msg))
+                                Box::new(
+                                    bot.edit_message_text(
+                                        chat_id,
+                                        msg_id,
+                                        format!("请先将本 Bot 加入目标 Channel\
+                                                 并设为管理员: {}",
+                                                error_msg))
                                     .send()
                                     .then(|result| match result {
                                         Ok(_) => futures::future::err(None),
@@ -113,12 +121,15 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                         }
                     })
                     .map(move |(bot, admins)| {
-                        let admin_id_list = admins.iter().map(|member| member.user.id).collect::<Vec<i64>>();
+                        let admin_id_list = admins.
+                            iter()
+                            .map(|member| member.user.id).collect::<Vec<i64>>();
                         (bot, admin_id_list, msg_id, channel_id)
                     }))
             }
         })
-        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| -> Box<Future<Item = i64, Error = Option<_>>> {
+        .and_then(move |(bot, admin_id_list, msg_id, channel_id)|
+                         -> Box<Future<Item = i64, Error = Option<_>>> {
             if admin_id_list.contains(&bot.inner.id) {
                 if admin_id_list.contains(&user_id) {
                     Box::new(futures::future::ok(channel_id))
@@ -133,7 +144,8 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                         }))
                 }
             } else {
-                Box::new(bot.edit_message_text(chat_id, msg_id, "请将本 Bot 设为管理员".to_string())
+                Box::new(bot.edit_message_text(chat_id, msg_id,
+                                               "请将本 Bot 设为管理员".to_string())
                     .send()
                     .then(|result| match result {
                         Ok(_) => futures::future::err(None),
@@ -150,7 +162,9 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
 
 fn to_chinese_error_msg(e: errors::Error) -> String {
     match e {
-        errors::Error(errors::ErrorKind::Curl(e), _) => format!("网络错误 ({})", e.into_error()),
+        errors::Error(errors::ErrorKind::Curl(e), _) => {
+            format!("网络错误 ({})", e.into_error())
+        }
         errors::Error(errors::ErrorKind::Utf8(e), _) => format!("编码错误 ({})", e),
         errors::Error(errors::ErrorKind::Xml(e), _) => {
             let s = e.to_string();
@@ -162,11 +176,16 @@ fn to_chinese_error_msg(e: errors::Error) -> String {
 }
 
 fn shoud_unsubscribe_for_user(tg_err_msg: &str) -> bool {
-    tg_err_msg.contains("Forbidden") || tg_err_msg.contains("chat not found") || tg_err_msg.contains("group chat was migrated to a supergroup chat")
+    tg_err_msg.contains("Forbidden") || tg_err_msg.contains("chat not found") ||
+    tg_err_msg.contains("group chat was migrated to a supergroup chat")
 }
 
-fn send_multiple_messages<'a>(bot: &telebot::RcBot, target: i64, messages: &[String]) -> impl Future<Item = (), Error = telebot::Error> + 'a {
-    let mut future: Box<Future<Item = telebot::RcBot, Error = telebot::Error>> = Box::new(futures::future::ok(bot.clone()));
+fn send_multiple_messages<'a>(bot: &telebot::RcBot,
+                              target: i64,
+                              messages: &[String])
+                              -> impl Future<Item = (), Error = telebot::Error> + 'a {
+    let mut future: Box<Future<Item = telebot::RcBot, Error = telebot::Error>> =
+        Box::new(futures::future::ok(bot.clone()));
     for msg in messages {
         let msg = msg.to_owned();
         future = Box::new(future.and_then(move |bot| {
@@ -223,7 +242,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let mut msgs = Vec::with_capacity(feed.subscribers.len());
                 for &subscriber in &feed.subscribers {
                     let m = bot.message(subscriber,
-                                 format!("《<a href=\"{}\">{}</a>》已经连续 5 天拉取出错 ({}), 可能已经关闭, 请取消订阅",
+                                 format!("《<a href=\"{}\">{}</a>》\
+                                          已经连续 5 天拉取出错 ({}),\
+                                          可能已经关闭, 请取消订阅",
                                          EscapeUrl(&feed.link),
                                          Escape(&feed.title),
                                          Escape(&err_msg)))
@@ -235,12 +256,15 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                     let bot = bot.clone();
                     let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
                         match e {
-                            telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
-                                if let Err(e) = db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                            telebot::error::Error::Telegram(ref s)
+                                if shoud_unsubscribe_for_user(s) => {
+                                if let Err(e) = db.borrow_mut()
+                                    .unsubscribe(subscriber, &feed_link) {
                                     log_error(&e);
                                 }
                                 Box::new(bot.message(subscriber,
-                                             format!("无法修复的错误 ({}), 自动退订", s))
+                                             format!("无法修复的错误 ({}), 自动退订",
+                                                     s))
                                     .send()
                                     .then(|_| Ok(())))
                             }
@@ -282,23 +306,27 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let feed_link = feed.link.clone();
                 let db = db.clone();
                 let bot = bot.clone();
-                let r = send_multiple_messages(&bot, subscriber, &msgs).map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
-                    match e {
-                        telebot::error::Error::Telegram(ref s) if shoud_unsubscribe_for_user(s) => {
-                            if let Err(e) = db.borrow_mut().unsubscribe(subscriber, &feed_link) {
-                                log_error(&e);
+                let r = send_multiple_messages(&bot, subscriber, &msgs)
+                    .map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+                        match e {
+                            telebot::error::Error::Telegram(ref s)
+                                if shoud_unsubscribe_for_user(s) => {
+                                if let Err(e) = db.borrow_mut()
+                                    .unsubscribe(subscriber, &feed_link) {
+                                    log_error(&e);
+                                }
+                                Box::new(bot.message(subscriber,
+                                             format!("无法修复的错误 ({}), 自动退订",
+                                                     s))
+                                    .send()
+                                    .then(|_| Ok(())))
                             }
-                            Box::new(bot.message(subscriber,
-                                         format!("无法修复的错误 ({}), 自动退订", s))
-                                .send()
-                                .then(|_| Ok(())))
+                            _ => {
+                                warn!("failed to send updates to {}, {:?}", subscriber, e);
+                                futures::future::ok(()).boxed()
+                            }
                         }
-                        _ => {
-                            warn!("failed to send updates to {}, {:?}", subscriber, e);
-                            futures::future::ok(()).boxed()
-                        }
-                    }
-                });
+                    });
                 msg_futures.push(r);
             }
             futures::future::join_all(msg_futures).then(|_| Ok(()))
@@ -334,7 +362,9 @@ fn main() {
 
     let mut lp = Core::new().unwrap();
     let lphandle = lp.handle();
-    let bot = lp.run(telebot::RcBot::new(lphandle, token)).expect("failed to initialize bot").update_interval(200);
+    let bot = lp.run(telebot::RcBot::new(lphandle, token))
+        .expect("failed to initialize bot")
+        .update_interval(200);
 
     {
         let db = db.clone();
@@ -357,13 +387,19 @@ fn main() {
                         } else {
                             raw = false;
                             let channel = args[0];
-                            subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
+                            subscriber = Box::new(check_channel(bot.clone(),
+                                                                channel,
+                                                                msg.chat.id,
+                                                                msg.from.unwrap().id));
                         }
                     }
                     2 => {
                         raw = true;
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
+                        subscriber = Box::new(check_channel(bot.clone(),
+                                                            channel,
+                                                            msg.chat.id,
+                                                            msg.from.unwrap().id));
                     }
                     _ => {
                         return Box::new(bot.message(msg.chat.id,
@@ -385,7 +421,8 @@ fn main() {
                     .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
             })
             .and_then(|(bot, db, subscriber, raw, chat_id)| {
-                let r: Box<Future<Item = _, Error = _>> = match db.borrow().get_subscribed_feeds(subscriber) {
+                let r: Box<Future<Item = _, Error = _>> = match db.borrow()
+                    .get_subscribed_feeds(subscriber) {
                     Some(feeds) => {
                         let text = String::from("订阅列表:");
                         if !raw {
@@ -396,9 +433,9 @@ fn main() {
                             });
                             Box::new(send_multiple_messages(&bot, chat_id, &msgs))
                         } else {
-                            let msgs = format_and_split_msgs(text,
-                                                             &feeds,
-                                                             |feed| format!("{}: {}", Escape(&feed.title), Escape(&feed.link)));
+                            let msgs = format_and_split_msgs(text, &feeds, |feed| {
+                                format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
+                            });
                             Box::new(send_multiple_messages(&bot, chat_id, &msgs))
                         }
                     }
@@ -437,7 +474,10 @@ fn main() {
                     }
                     2 => {
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
+                        subscriber = Box::new(check_channel(bot.clone(),
+                                                            channel,
+                                                            msg.chat.id,
+                                                            msg.from.unwrap().id));
                         feed_link = args[1];
                     }
                     _ => {
@@ -461,7 +501,8 @@ fn main() {
                     })
                     .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id, lphandle)))
             })
-            .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| -> Box<Future<Item = _, Error = _>> {
+            .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)|
+                        -> Box<Future<Item = _, Error = _>> {
                 if db.borrow().is_subscribed(subscriber, &feed_link) {
                     Box::new(bot.message(chat_id, "已订阅过的 RSS".to_string())
                         .send()
@@ -470,7 +511,9 @@ fn main() {
                             Err(e) => Err(Some(e)),
                         }))
                 } else {
-                    Box::new(futures::future::ok((bot, db, subscriber, feed_link, chat_id, lphandle)))
+                    Box::new(
+                        futures::future::ok(
+                            (bot, db, subscriber, feed_link, chat_id, lphandle)))
                 }
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
@@ -532,7 +575,10 @@ fn main() {
                     }
                     2 => {
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(bot.clone(), channel, msg.chat.id, msg.from.unwrap().id));
+                        subscriber = Box::new(check_channel(bot.clone(),
+                                                            channel,
+                                                            msg.chat.id,
+                                                            msg.from.unwrap().id));
                         feed_link = args[1];
                     }
                     _ => {
@@ -566,7 +612,9 @@ fn main() {
                             .disable_web_page_preview(true)
                             .send()
                     }
-                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => bot.message(chat_id, "未订阅过的 RSS".to_string()).send(),
+                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
+                        bot.message(chat_id, "未订阅过的 RSS".to_string()).send()
+                    }
                     Err(e) => {
                         log_error(&e);
                         bot.message(chat_id, format!("error: {}", e)).send()
@@ -627,7 +675,10 @@ fn main() {
                 }
             } else {
                 bot.message(msg.chat.id,
-                             "使用方法: 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel".to_string())
+                             "使用方法: \
+                              使用此命令回复想要退订的 RSS 消息即可退订,\
+                              不支持 Channel"
+                                 .to_string())
                     .send()
             })
             .then(|result| match result {
@@ -645,17 +696,21 @@ fn main() {
         let handle = lp.handle();
         let bot = bot.clone();
         // 5 minute
-        lp.handle().spawn(Interval::new(Duration::from_secs(300), &lp.handle())
-            .expect("failed to start feed loop")
-            .for_each(move |_| {
-                let feeds = db.borrow().get_all_feeds();
-                let session = Session::new(handle.clone());
-                for feed in feeds {
-                    handle.spawn(fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed));
-                }
-                Ok(())
-            })
-            .map_err(|e| error!("feed loop error: {}", e)))
+        lp.handle()
+            .spawn(Interval::new(Duration::from_secs(300), &lp.handle())
+                .expect("failed to start feed loop")
+                .for_each(move |_| {
+                    let feeds = db.borrow().get_all_feeds();
+                    let session = Session::new(handle.clone());
+                    for feed in feeds {
+                        handle.spawn(fetch_feed_updates(bot.clone(),
+                                                        db.clone(),
+                                                        session.clone(),
+                                                        feed));
+                    }
+                    Ok(())
+                })
+                .map_err(|e| error!("feed loop error: {}", e)))
     }
 
     loop {

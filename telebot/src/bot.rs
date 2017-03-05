@@ -1,5 +1,5 @@
-//! This is the actual Bot module. For ergonomic reasons there is a RcBot which composes the real bot
-//! as an underlying field. You should always use RcBot.
+//! This is the actual Bot module. For ergonomic reasons there is a RcBot which composes the real
+//! bot as an underlying field. You should always use RcBot.
 
 use objects;
 use error::Error;
@@ -70,7 +70,10 @@ impl Bot {
     /// Creates a new request and adds a JSON message to it. The returned Future contains a the
     /// reply as a string.  This method should be used if no file is added because a JSON msg is
     /// always compacter than a formdata one.
-    pub fn fetch_json<'a>(&self, func: &str, msg: &str) -> impl Future<Item = String, Error = Error> + 'a {
+    pub fn fetch_json<'a>(&self,
+                          func: &str,
+                          msg: &str)
+                          -> impl Future<Item = String, Error = Error> + 'a {
         println!("Send JSON: {}", msg);
 
         let mut header = List::new();
@@ -109,7 +112,11 @@ impl Bot {
         }
 
         // add the file
-        form.part(kind).buffer(file_name, content).content_type("application/octet-stream").add().unwrap();
+        form.part(kind)
+            .buffer(file_name, content)
+            .content_type("application/octet-stream")
+            .add()
+            .unwrap();
 
         // create a http post request
         a.post(true).unwrap();
@@ -119,7 +126,10 @@ impl Bot {
     }
 
     /// calls cURL and parses the result for an error
-    pub fn _fetch<'a>(&self, func: &str, mut a: Easy) -> impl Future<Item = String, Error = Error> + 'a {
+    pub fn _fetch<'a>(&self,
+                      func: &str,
+                      mut a: Easy)
+                      -> impl Future<Item = String, Error = Error> + 'a {
         let result = Arc::new(Mutex::new(Vec::new()));
 
         a.url(&format!("https://api.telegram.org/bot{}/{}", self.key, func)).unwrap();
@@ -166,7 +176,8 @@ impl Bot {
                 // try to parse the result as a JSON and find the OK field.
                 // If the ok field is true, then the string in "result" will be returned
                 if let Ok(req) = serde_json::from_str::<Value>(&x) {
-                    if let (Some(ok), res) = (req.find("ok").and_then(Value::as_bool), req.find("result")) {
+                    if let (Some(ok), res) = (req.find("ok").and_then(Value::as_bool),
+                                              req.find("result")) {
                         if ok {
                             if let Some(result) = res {
                                 let answer = serde_json::to_string(result).unwrap();
@@ -197,8 +208,11 @@ impl RcBot {
         self
     }
 
-    /// Creates a new command and returns a stream which will yield a message when the command is send
-    pub fn new_cmd(&self, cmd: &str) -> impl Stream<Item = (RcBot, objects::Message), Error = Error> {
+    /// Creates a new command and returns a stream which
+    /// will yield a message when the command is send
+    pub fn new_cmd(&self,
+                   cmd: &str)
+                   -> impl Stream<Item = (RcBot, objects::Message), Error = Error> {
         let (sender, receiver) = mpsc::unbounded();
 
         self.inner.handlers.borrow_mut().insert(cmd.into(), sender);
@@ -217,7 +231,8 @@ impl RcBot {
     /// When an update is available the last_id will be updated and the message is filtered
     /// for commands
     /// The message is forwarded to the returned stream if no command was found
-    pub fn get_stream<'a>(&'a self) -> impl Stream<Item = (RcBot, objects::Update), Error = Error> + 'a {
+    pub fn get_stream<'a>(&'a self)
+                          -> impl Stream<Item = (RcBot, objects::Update), Error = Error> + 'a {
         use functions::*;
 
         Interval::new(Duration::from_millis(self.inner.update_interval.get()),
@@ -225,7 +240,12 @@ impl RcBot {
             .unwrap()
             .map_err(|_| Error::Unknown)
             .and_then(move |_| self.get_updates().offset(self.inner.last_id.get()).send())
-            .map(|(_, x)| stream::iter(x.0.into_iter().map(|x| Ok(x)).collect::<Vec<Result<objects::Update, Error>>>()))
+            .map(|(_, x)| {
+                stream::iter(x.0
+                    .into_iter()
+                    .map(|x| Ok(x))
+                    .collect::<Vec<Result<objects::Update, Error>>>())
+            })
             .flatten()
             .and_then(move |x| {
                 if self.inner.last_id.get() < x.update_id as u32 + 1 {
@@ -242,7 +262,8 @@ impl RcBot {
                         let mut content = text.split_whitespace();
                         if let Some(cmd) = content.next() {
                             let s: Vec<&str> = cmd.split("@").take(2).collect();
-                            if s.len() > 0 && (s.len() < 2 || s[1] == self.inner.username) && self.inner.handlers.borrow().contains_key(s[0]) {
+                            if s.len() > 0 && (s.len() < 2 || s[1] == self.inner.username) &&
+                               self.inner.handlers.borrow().contains_key(s[0]) {
                                 message.text = Some(content.collect::<Vec<&str>>().join(" "));
 
                                 forward = Some(s[0].into());

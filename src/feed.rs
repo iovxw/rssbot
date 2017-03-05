@@ -19,10 +19,14 @@ lazy_static! {
 }
 
 pub trait FromXml: Sized {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, start: &BytesStart) -> Result<Self>;
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
+                                     start: &BytesStart)
+                                     -> Result<Self>;
 }
 
-fn parse_atom_link<B: std::io::BufRead>(reader: &mut XmlReader<B>, attributes: Attributes) -> Option<String> {
+fn parse_atom_link<B: std::io::BufRead>(reader: &mut XmlReader<B>,
+                                        attributes: Attributes)
+                                        -> Option<String> {
     let mut link_tmp = None;
     let mut is_alternate = true;
     for attribute in attributes {
@@ -65,7 +69,9 @@ fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
 }
 
 impl FromXml for Option<String> {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, _start: &BytesStart) -> Result<Self> {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
+                                     _start: &BytesStart)
+                                     -> Result<Self> {
         let mut buf = Vec::new();
         let mut content: Option<String> = None;
         loop {
@@ -100,7 +106,9 @@ pub struct RSS {
 }
 
 impl FromXml for RSS {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, _start: &BytesStart) -> Result<Self> {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
+                                     _start: &BytesStart)
+                                     -> Result<Self> {
         let mut buf = Vec::new();
         let mut rss = RSS::default();
         loop {
@@ -164,7 +172,9 @@ pub struct Item {
 }
 
 impl FromXml for Item {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, _start: &BytesStart) -> Result<Self> {
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
+                                     _start: &BytesStart)
+                                     -> Result<Self> {
         let mut buf = Vec::new();
         let mut item = Item::default();
         loop {
@@ -270,7 +280,9 @@ fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     rss
 }
 
-pub fn fetch_feed<'a>(session: Session, link: String) -> impl Future<Item = RSS, Error = Error> + 'a {
+pub fn fetch_feed<'a>(session: Session,
+                      link: String)
+                      -> impl Future<Item = RSS, Error = Error> + 'a {
     let mut req = Easy::new();
     let buf = Arc::new(Mutex::new(Vec::new()));
     {

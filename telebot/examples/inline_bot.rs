@@ -24,9 +24,12 @@ fn main() {
     let stream = bot.get_stream()
         .filter_map(|(bot, msg)| msg.inline_query.map(|query| (bot, query)))
         .and_then(|(bot, query)| {
-            let result: Vec<Box<Serialize>> =
-                vec![Box::new(InlineQueryResultArticle::new("Test".into(),
-                                                            Box::new(InputMessageContent::Text::new("This is a test".into()))))];
+            let result: Vec<Box<Serialize>> = vec![Box::new(
+                    InlineQueryResultArticle::new(
+                        "Test".into(),
+                        Box::new(
+                            InputMessageContent::Text::new("This is a test"
+                                                           .into()))))];
 
             bot.answer_inline_query(query.id, result).is_personal(true).send()
         });
