@@ -31,9 +31,9 @@ pub struct RcBot {
 
 impl RcBot {
     pub fn new<'a>(handle: Handle, key: &str) -> impl Future<Item = RcBot, Error = Error> + 'a {
-        use functions::*;
+        use functions::FunctionGetMe;
         let bot = RcBot { inner: Rc::new(Bot::new(handle, key)) };
-        bot.get_me().send().map(|(mut bot,me)| {
+        bot.get_me().send().map(|(mut bot, me)| {
             Rc::get_mut(&mut bot.inner).as_mut().unwrap().id = me.id;
             Rc::get_mut(&mut bot.inner).as_mut().unwrap().username = me.username.unwrap();
             bot

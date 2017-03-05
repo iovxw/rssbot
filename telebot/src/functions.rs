@@ -388,6 +388,14 @@ pub struct GetChat {
     chat_id: Integer,
 }
 
+#[derive(TelegramFunction,  Serialize)]
+#[call = "getChat"]
+#[answer = "Chat"]
+#[function = "get_chat_string"]
+pub struct GetChatString {
+    chat_id: String,
+}
+
 /// Use this method to get a list of administrators in a chat. On success, returns an Array of
 /// ChatMember objects that contains information about all chat administrators except other bots.
 /// If the chat is a group or a supergroup and no administrators were appointed, only the creator
@@ -449,4 +457,18 @@ pub struct AnswerInlineQuery {
     next_offset: Option<String>,
     switch_pm_text: Option<String>,
     switch_pm_parameter: Option<String>,
+}
+
+#[derive(TelegramFunction,  Serialize)]
+#[call = "editMessageText"]
+#[answer = "Message"]
+#[function = "edit_message_text"]
+pub struct EditMessageText {
+    chat_id: i64,
+    message_id: i64,
+    text: String,
+    #[serde(skip_serializing_if="Option::is_none")]
+    parse_mode: Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    disable_web_page_preview: Option<bool>,
 }

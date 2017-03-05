@@ -32,10 +32,8 @@ use tokio_curl::Session;
 mod errors;
 mod feed;
 mod data;
-mod telebot_missing;
 mod utlis;
 
-use telebot_missing::{get_chat_string, edit_message_text};
 use utlis::{Escape, EscapeUrl};
 
 const TELEGRAM_MAX_MSG_LEN: usize = 4096;
@@ -67,15 +65,14 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
         .map_err(|e| Some(e))
         .and_then(move |(bot, msg)| {
             let msg_id = msg.message_id;
-            get_chat_string(&bot, channel)
+            bot.get_chat_string(channel)
                 .send()
                 .or_else(move |e| -> Box<Future<Item = _, Error = Option<telebot::Error>>> {
                     match e {
                         telebot::Error::Telegram(err_msg) => {
-                            Box::new(edit_message_text(&bot,
-                                                       chat_id,
-                                                       msg_id,
-                                                       format!("无法找到目标 Channel: {}", err_msg))
+                            Box::new(bot.edit_message_text(chat_id,
+                                                   msg_id,
+                                                   format!("无法找到目标 Channel: {}", err_msg))
                                 .send()
                                 .then(|result| match result {
                                     Ok(_) => futures::future::err(None),
@@ -102,11 +99,10 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                     .or_else(move |e| -> Box<Future<Item = _, Error = Option<_>>> {
                         match e {
                             telebot::Error::Telegram(error_msg) => {
-                                Box::new(edit_message_text(&bot,
-                                                           chat_id,
-                                                           msg_id,
-                                                           format!("请先将本 Bot 加入目标 Channel 并设为管理员: {}",
-                                                                   error_msg))
+                                Box::new(bot.edit_message_text(chat_id,
+                                                       msg_id,
+                                                       format!("请先将本 Bot 加入目标 Channel 并设为管理员: {}",
+                                                               error_msg))
                                     .send()
                                     .then(|result| match result {
                                         Ok(_) => futures::future::err(None),
@@ -127,10 +123,9 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                 if admin_id_list.contains(&user_id) {
                     Box::new(futures::future::ok(channel_id))
                 } else {
-                    Box::new(edit_message_text(&bot,
-                                               chat_id,
-                                               msg_id,
-                                               "该命令只能由 Channel 管理员使用".to_string())
+                    Box::new(bot.edit_message_text(chat_id,
+                                           msg_id,
+                                           "该命令只能由 Channel 管理员使用".to_string())
                         .send()
                         .then(|result| match result {
                             Ok(_) => futures::future::err(None),
@@ -138,10 +133,7 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                         }))
                 }
             } else {
-                Box::new(edit_message_text(&bot,
-                                           chat_id,
-                                           msg_id,
-                                           "请将本 Bot 设为管理员".to_string())
+                Box::new(bot.edit_message_text(chat_id, msg_id, "请将本 Bot 设为管理员".to_string())
                     .send()
                     .then(|result| match result {
                         Ok(_) => futures::future::err(None),
