@@ -9,16 +9,14 @@
 //!
 //! # Example usage
 //!
-//! ```
+//! ```rust,no_run
 //! extern crate telebot;
 //! extern crate tokio_core;
 //! extern crate futures;
-
+//!
 //! use telebot::bot;
 //! use tokio_core::reactor::Core;
 //! use futures::stream::Stream;
-//! use futures::Future;
-//! use std::fs::File;
 //!
 //! // import all available functions
 //! use telebot::functions::*;
@@ -28,7 +26,8 @@
 //!     let mut lp = Core::new().unwrap();
 //!
 //!     // init the bot with the bot key and an update interval of 200ms
-//!     let bot = bot::RcBot::new(lp.handle(), "<TELEGRAM-BOT-TOKEN>")
+//!     let handle = lp.handle();
+//!     let bot = lp.run(bot::RcBot::new(handle, "<TELEGRAM-BOT-TOKEN>")).unwrap()
 //!         .update_interval(200);
 //!
 //!     // register a new command "reply" which replies all received messages

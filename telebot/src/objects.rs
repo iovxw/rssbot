@@ -10,9 +10,6 @@ pub type Integer = i64;
 pub type Vector<T> = Vec<T>;
 pub type NotImplemented = ();
 
-use std::rc::Rc;
-use bot::Bot;
-use file;
 use erased_serde::Serialize;
 use uuid::Uuid;
 
@@ -726,7 +723,7 @@ pub struct InlineQueryResultCachedAudio {
     pub input_message_content: Option<Box<Serialize>>,
 }
 
-pub mod InputMessageContent {
+pub mod input_message_content {
     use super::Boolean;
 
     #[derive(setter, Serialize, Deserialize, Debug)]
