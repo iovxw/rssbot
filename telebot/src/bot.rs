@@ -241,10 +241,11 @@ impl RcBot {
                     if let Some(text) = message.text.clone() {
                         let mut content = text.split_whitespace();
                         if let Some(cmd) = content.next() {
-                            if self.inner.handlers.borrow_mut().contains_key(cmd) {
+                            let s: Vec<&str> = cmd.split("@").take(2).collect();
+                            if s.len() > 0 && (s.len() < 2 || s[1] == self.inner.username) && self.inner.handlers.borrow().contains_key(s[0]) {
                                 message.text = Some(content.collect::<Vec<&str>>().join(" "));
 
-                                forward = Some(cmd.into());
+                                forward = Some(s[0].into());
                             }
                         }
                     }
