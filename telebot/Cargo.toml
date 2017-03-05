@@ -1,0 +1,25 @@
+[package]
+name = "telebot"
+version = "0.1.1"
+
+authors = ["bytesnake <bytesnake@mailbox.org>"]
+license = "MIT"
+description = "A wrapper around the telegram bot api, powered by futures"
+
+repository = "https://github.com/bytesnake/telebot"
+readme = "README.md"
+documentation = "https://docs.rs/telebot"
+
+keywords = ["telebot", "telegram", "bot", "chat"]
+
+[dependencies]
+serde = "0.8"
+serde_json = "0.8.4"
+serde_derive = "0.8"
+erased-serde = "0.1.3"
+curl = "0.4.1"      
+futures = "0.1.7"     
+tokio-core = "0.1.2"
+tokio-curl = "0.1.6"
+uuid = { version = "0.2", features = ["v4"] }
+telebot-derive = "0.0.6"

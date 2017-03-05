@@ -13,7 +13,7 @@ dependencies = [
  "serde 0.8.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 0.8.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 0.8.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "telebot 0.1.1 (git+https://github.com/bytesnake/telebot.git)",
+ "telebot 0.1.1",
  "tokio-core 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-curl 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -421,7 +421,6 @@ dependencies = [
 [[package]]
 name = "telebot"
 version = "0.1.1"
-source = "git+https://github.com/bytesnake/telebot.git#490aa478c65f6b29fc72a81d80f5ab9eba746335"
 dependencies = [
  "curl 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "erased-serde 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -624,7 +623,6 @@ dependencies = [
 "checksum slab 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "17b4fcaed89ab08ef143da37bc52adbcc04d4a69014f4c1208d6b51f0c47bc23"
 "checksum syn 0.10.8 (registry+https://github.com/rust-lang/crates.io-index)" = "58fd09df59565db3399efbba34ba8a2fec1307511ebd245d0061ff9d42691673"
 "checksum syn 0.11.4 (registry+https://github.com/rust-lang/crates.io-index)" = "f4f94368aae82bb29656c98443a7026ca931a659e8d19dcdc41d6e273054e820"
-"checksum telebot 0.1.1 (git+https://github.com/bytesnake/telebot.git)" = "<none>"
 "checksum telebot-derive 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "89c81b2663abc13c36830a76d7ab7a84c0f7cfbee1139bb24303c10dbe4b2de0"
 "checksum thread-id 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a9539db560102d1cef46b8b78ce737ff0bb64e7e18d35b2a5688f7d097d0ff03"
 "checksum thread-id 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4437c97558c70d129e40629a5b385b3fb1ffac301e63941335e4d354081ec14a"

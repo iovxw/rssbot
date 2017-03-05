@@ -122,14 +122,8 @@ fn check_channel<'a>(bot: telebot::RcBot, channel: &str, chat_id: i64, user_id: 
                     }))
             }
         })
-        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| {
-            bot.get_me()
-                .send()
-                .map_err(|e| Some(e))
-                .map(move |(bot, me)| (bot, me.id, admin_id_list, msg_id, channel_id))
-        })
-        .and_then(move |(bot, bot_id, admin_id_list, msg_id, channel_id)| -> Box<Future<Item = i64, Error = Option<_>>> {
-            if admin_id_list.contains(&bot_id) {
+        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| -> Box<Future<Item = i64, Error = Option<_>>> {
+            if admin_id_list.contains(&bot.inner.id) {
                 if admin_id_list.contains(&user_id) {
                     Box::new(futures::future::ok(channel_id))
                 } else {
@@ -347,7 +341,8 @@ fn main() {
     env_logger::init().unwrap();
 
     let mut lp = Core::new().unwrap();
-    let bot = telebot::RcBot::new(lp.handle(), token).update_interval(200);
+    let lphandle = lp.handle();
+    let bot = lp.run(telebot::RcBot::new(lphandle, token)).expect("failed to initialize bot").update_interval(200);
 
     {
         let db = db.clone();
