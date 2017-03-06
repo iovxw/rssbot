@@ -188,6 +188,9 @@ impl Database {
 
     pub fn update<'a>(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(rss_link);
+
+        self.feeds.get_mut(&feed_id).unwrap().error_count = 0;
+
         let mut result = Vec::new();
         let mut new_hash_list = HashSet::new();
         let items_len = items.len();
