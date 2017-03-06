@@ -113,6 +113,11 @@ impl Database {
             .unwrap_or_default()
     }
 
+    pub fn reset_error_count(&mut self, rss_link: &str) {
+        let feed_id = get_hash(rss_link);
+        self.feeds.get_mut(&feed_id).unwrap().error_count = 0;
+    }
+
     pub fn is_subscribed(&self, subscriber: SubscriberID, rss_link: &str) -> bool {
         self.subscribers
             .get(&subscriber)
@@ -189,7 +194,7 @@ impl Database {
     pub fn update<'a>(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(rss_link);
 
-        self.feeds.get_mut(&feed_id).unwrap().error_count = 0;
+        self.reset_error_count(rss_link);
 
         let mut result = Vec::new();
         let mut new_hash_list = HashSet::new();
@@ -202,17 +207,19 @@ impl Database {
             }
         }
         if !result.is_empty() {
-            let max_size = items_len * 2;
-            let feed = self.feeds.get_mut(&feed_id).unwrap();
-            for old_hash in &feed.hash_list {
-                new_hash_list.insert(*old_hash);
-                if new_hash_list.len() >= max_size {
-                    break;
+            {
+                let max_size = items_len * 2;
+                let feed = self.feeds.get_mut(&feed_id).unwrap();
+                for old_hash in &feed.hash_list {
+                    new_hash_list.insert(*old_hash);
+                    if new_hash_list.len() >= max_size {
+                        break;
+                    }
                 }
+                feed.hash_list = new_hash_list;
             }
-            feed.hash_list = new_hash_list;
+            self.save().unwrap_or_default();
         }
-        self.save().unwrap_or_default();
         result
     }
 

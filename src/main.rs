@@ -238,6 +238,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
         .or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
             if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
                 // 1440 * 5 minute = 5 days
+                db.borrow_mut().reset_error_count(&feed.link);
                 let err_msg = to_chinese_error_msg(e);
                 let mut msgs = Vec::with_capacity(feed.subscribers.len());
                 for &subscriber in &feed.subscribers {
