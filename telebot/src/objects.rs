@@ -151,7 +151,7 @@ pub struct Video {
     pub duration: Integer,
     pub thumb: Option<PhotoSize>,
     pub mime_type: Option<String>,
-    pub file_size: Option<String>,
+    pub file_size: Option<Integer>,
 }
 
 /// This object represents a voice note.
