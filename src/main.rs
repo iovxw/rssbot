@@ -424,9 +424,10 @@ fn main() {
             .and_then(|(bot, db, subscriber, raw, chat_id)| {
                 let r: Box<Future<Item = _, Error = _>> = match db.borrow()
                     .get_subscribed_feeds(subscriber) {
-                    Some(feeds) => {
+                    Some(mut feeds) => {
                         let text = String::from("订阅列表:");
                         if !raw {
+                            feeds.sort_by_key(|feed| &feed.title);
                             let msgs = format_and_split_msgs(text, &feeds, |feed| {
                                 format!("<a href=\"{}\">{}</a>",
                                         EscapeUrl(&feed.link),
@@ -434,6 +435,7 @@ fn main() {
                             });
                             Box::new(send_multiple_messages(&bot, chat_id, &msgs))
                         } else {
+                            feeds.sort_by_key(|feed| &feed.link);
                             let msgs = format_and_split_msgs(text, &feeds, |feed| {
                                 format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
                             });
