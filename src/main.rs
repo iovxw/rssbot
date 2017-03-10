@@ -17,6 +17,7 @@ extern crate telebot;
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
+extern crate pinyin_order;
 
 use std::io::prelude::*;
 use std::rc::Rc;
@@ -427,7 +428,7 @@ fn main() {
                     Some(mut feeds) => {
                         let text = String::from("订阅列表:");
                         if !raw {
-                            feeds.sort_by_key(|feed| &feed.title);
+                            feeds.sort_by_key(|feed| pinyin_order::as_pinyin(&feed.title));
                             let msgs = format_and_split_msgs(text, &feeds, |feed| {
                                 format!("<a href=\"{}\">{}</a>",
                                         EscapeUrl(&feed.link),

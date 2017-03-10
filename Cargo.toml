@@ -10,6 +10,7 @@ error-chain = "0.9"
 quick-xml = "0.6"
 lazy_static = "0.2"
 regex = "0.2"
+pinyin-order = "0.1"
 
 telebot = { path = "./telebot" }
 # version specified by telebot
