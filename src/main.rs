@@ -259,52 +259,60 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
     let feed_ = feed.clone();
     feed::fetch_feed(session, feed.link.to_owned())
         .map(move |rss| (bot_, db_, rss, feed_))
-        .or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
-            if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
-                // 1440 * 5 minute = 5 days
-                db.borrow_mut().reset_error_count(&feed.link);
-                let err_msg = to_chinese_error_msg(e);
-                let mut msgs = Vec::with_capacity(feed.subscribers.len());
-                for &subscriber in &feed.subscribers {
-                    let m = bot.message(subscriber,
-                                        format!("《<a href=\"{}\">{}</a>》\
-                                          已经连续 5 天拉取出错 ({}),\
-                                          可能已经关闭, 请取消订阅",
-                                                EscapeUrl(&feed.link),
-                                                Escape(&feed.title),
-                                                Escape(&err_msg)))
-                        .parse_mode("HTML")
-                        .disable_web_page_preview(true)
-                        .send();
-                    let feed_link = feed.link.clone();
-                    let db = db.clone();
-                    let bot = bot.clone();
-                    let r = m.or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
-                        match e {
-                            telebot::error::Error::Telegram(ref s)
-                                if shoud_unsubscribe_for_user(s) => {
-                                if let Err(e) =
-                                    db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+        .or_else(move |e| {
+            futures::future::result(if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
+                                        Err((bot, db, feed))
+                                    } else {
+                                        Ok(())
+                                    })
+                    .or_else(|(bot, db, feed)| {
+                        // 1440 * 5 minute = 5 days
+                        db.borrow_mut().reset_error_count(&feed.link);
+                        let err_msg = to_chinese_error_msg(e);
+                        let mut msgs = Vec::with_capacity(feed.subscribers.len());
+                        for &subscriber in &feed.subscribers {
+                            let m = bot.message(subscriber,
+                                                format!("《<a href=\"{}\">{}</a>》\
+                                                         已经连续 5 天拉取出错 ({}),\
+                                                         可能已经关闭, 请取消订阅",
+                                                        EscapeUrl(&feed.link),
+                                                        Escape(&feed.title),
+                                                        Escape(&err_msg)))
+                                .parse_mode("HTML")
+                                .disable_web_page_preview(true)
+                                .send();
+                            let feed_link = feed.link.clone();
+                            let db = db.clone();
+                            let bot = bot.clone();
+                            let r = m.or_else(move |e| {
+                                futures::future::result(match e {
+                                    telebot::error::Error::Telegram(ref s)
+                                        if shoud_unsubscribe_for_user(s) => {
+                                            Err((bot, db, s.to_owned(), subscriber, feed_link))
+                                        }
+                                    _ => {
+                                        warn!("failed to send error to {}, {:?}", subscriber, e);
+                                        Ok(())
+                                    }
+                                })
+                            .or_else(|(bot, db, s, subscriber, feed_link)| {
+                                if let Err(e) = db.borrow_mut()
+                                    .unsubscribe(subscriber, &feed_link) {
                                     log_error(&e);
                                 }
-                                Box::new(bot.message(subscriber,
-                                             format!("无法修复的错误 ({}), 自动退订",
-                                                     s))
+                                bot.message(subscriber,
+                                            format!("无法修复的错误 ({}), 自动退订", s))
                                     .send()
-                                    .then(|_| Err(())))
-                            }
-                            _ => {
-                                warn!("failed to send error to {}, {:?}", subscriber, e);
-                                Box::new(futures::future::err(()))
-                            }
+                                    .then(|_| Err(()))
+                            })
+                                        .and_then(|_| Err(()))
+                            });
+                            // if not use Box, rustc will panic
+                            msgs.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
                         }
-                    });
-                    msgs.push(r);
-                }
-                Box::new(futures::future::join_all(msgs).then(|_| Err(())))
-            } else {
-                Box::new(futures::future::err(()))
-            }
+                        futures::future::join_all(msgs).then(|_| Err(()))
+                    })
+                    .and_then(|_| Err(()))
         })
         .and_then(|(bot, db, rss, feed)| {
             if rss.title != feed.title {
@@ -337,28 +345,29 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let feed_link = feed.link.clone();
                 let db = db.clone();
                 let bot = bot.clone();
-                let r = send_multiple_messages(&bot, subscriber, &msgs)
-                    .or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
-                        match e {
-                            telebot::error::Error::Telegram(ref s)
-                                if shoud_unsubscribe_for_user(s) => {
+                let r = send_multiple_messages(&bot, subscriber, &msgs).or_else(move |e| {
+                    futures::future::result(match e {
+                                                telebot::error::Error::Telegram(ref s)
+                  if shoud_unsubscribe_for_user(s) => {
+                                          Err((bot, db, s.to_owned(), subscriber, feed_link))
+                                      }
+                                                _ => {
+                        warn!("failed to send updates to {}, {:?}", subscriber, e);
+                        Ok(())
+                    }
+                                            })
+                            .or_else(|(bot, db, s, subscriber, feed_link)| {
                                 if let Err(e) =
                                     db.borrow_mut().unsubscribe(subscriber, &feed_link) {
                                     log_error(&e);
                                 }
                                 Box::new(bot.message(subscriber,
-                                             format!("无法修复的错误 ({}), 自动退订",
-                                                     s))
-                                    .send()
-                                    .then(|_| Err(())))
-                            }
-                            _ => {
-                                warn!("failed to send updates to {}, {:?}", subscriber, e);
-                                Box::new(futures::future::err(()))
-                            }
-                        }
-                    });
-                msg_futures.push(r);
+                                             format!("无法修复的错误 ({}), 自动退订", s))
+                                   .send()
+                                   .then(|_| Err(())))
+                            })
+                });
+                msg_futures.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
             }
             futures::future::join_all(msg_futures).then(|_| Ok(()))
         })
