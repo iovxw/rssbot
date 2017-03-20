@@ -294,9 +294,9 @@ pub fn fetch_feed<'a>(session: Session,
         req.follow_location(true).unwrap();
         req.timeout(Duration::from_secs(10)).unwrap();
         req.write_function(move |data| {
-                buf.lock().unwrap().extend_from_slice(data);
-                Ok(data.len())
-            })
+                                buf.lock().unwrap().extend_from_slice(data);
+                                Ok(data.len())
+                            })
             .unwrap();
     }
     session.perform(req).map_err(|e| e.into()).and_then(move |mut resp| {
