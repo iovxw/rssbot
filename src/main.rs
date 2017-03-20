@@ -348,9 +348,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let r = send_multiple_messages(&bot, subscriber, &msgs).or_else(move |e| {
                     futures::future::result(match e {
                                                 telebot::error::Error::Telegram(ref s)
-                  if shoud_unsubscribe_for_user(s) => {
-                                          Err((bot, db, s.to_owned(), subscriber, feed_link))
-                                      }
+                            if shoud_unsubscribe_for_user(s) => {
+                                Err((bot, db, s.to_owned(), subscriber, feed_link))
+                            }
                                                 _ => {
                         warn!("failed to send updates to {}, {:?}", subscriber, e);
                         Ok(())
@@ -362,9 +362,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                                     log_error(&e);
                                 }
                                 Box::new(bot.message(subscriber,
-                                             format!("无法修复的错误 ({}), 自动退订", s))
-                                   .send()
-                                   .then(|_| Err(())))
+                                            format!("无法修复的错误 ({}), 自动退订", s))
+                                     .send()
+                                     .then(|_| Err(())))
                             })
                 });
                 msg_futures.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
