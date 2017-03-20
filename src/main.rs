@@ -468,25 +468,25 @@ fn main() {
                                           Err(e) => Err(Some(e)),
                                       })
                         })
-                        .and_then(|(bot, raw, chat_id, mut feeds)| {
-                            let text = String::from("订阅列表:");
-                            let f = if !raw {
-                                feeds.sort_by_key(|feed| pinyin_order::as_pinyin(&feed.title));
-                                let msgs = format_and_split_msgs(text, &feeds, |feed| {
-                                    format!("<a href=\"{}\">{}</a>",
-                                            EscapeUrl(&feed.link),
-                                            Escape(&feed.title))
-                                });
-                                send_multiple_messages(&bot, chat_id, &msgs)
-                            } else {
-                                feeds.sort_by(|a, b| a.link.cmp(&b.link));
-                                let msgs = format_and_split_msgs(text, &feeds, |feed| {
-                                    format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
-                                });
-                                send_multiple_messages(&bot, chat_id, &msgs)
-                            };
-                            f.map_err(|e| Some(e))
-                        })
+            })
+            .and_then(|(bot, raw, chat_id, mut feeds)| {
+                let text = String::from("订阅列表:");
+                let f = if !raw {
+                    feeds.sort_by_key(|feed| pinyin_order::as_pinyin(&feed.title));
+                    let msgs = format_and_split_msgs(text, &feeds, |feed| {
+                        format!("<a href=\"{}\">{}</a>",
+                                EscapeUrl(&feed.link),
+                                Escape(&feed.title))
+                    });
+                    send_multiple_messages(&bot, chat_id, &msgs)
+                } else {
+                    feeds.sort_by(|a, b| a.link.cmp(&b.link));
+                    let msgs = format_and_split_msgs(text, &feeds, |feed| {
+                        format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
+                    });
+                    send_multiple_messages(&bot, chat_id, &msgs)
+                };
+                f.map_err(|e| Some(e))
             })
             .then(|result| match result {
                       Err(Some(err)) => {
