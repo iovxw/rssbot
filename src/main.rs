@@ -91,11 +91,11 @@ fn check_channel<'a>(bot: telebot::RcBot,
                             })
                             .and_then(|e| Err(Some(e)))
                 })
-                .map(move |(bot, channel)| (bot, channel, msg_id))
+                .map(move |(bot, channel)| (bot, chat_id, user_id, channel, msg_id))
         })
-        .and_then(move |(bot, channel, msg_id)| {
+        .and_then(|(bot, chat_id, user_id, channel, msg_id)| {
             futures::future::result(if channel.kind == "channel" {
-                                        Ok((bot, chat_id, channel.id, msg_id))
+                                        Ok((bot, chat_id, user_id, channel.id, msg_id))
                                     } else {
                                         Err((bot, chat_id, msg_id))
                                     })
@@ -108,7 +108,7 @@ fn check_channel<'a>(bot: telebot::RcBot,
                                   })
                     })
         })
-        .and_then(|(bot, chat_id, channel_id, msg_id)| {
+        .and_then(|(bot, chat_id, user_id, channel_id, msg_id)| {
             bot.unban_chat_administrators(channel_id)
                 .send()
                 .or_else(move |e| {
@@ -134,12 +134,12 @@ fn check_channel<'a>(bot: telebot::RcBot,
                 .map(move |(bot, admins)| {
                          let admin_id_list =
                         admins.iter().map(|member| member.user.id).collect::<Vec<i64>>();
-                         (bot, admin_id_list, msg_id, channel_id)
+                    (bot, chat_id, user_id, admin_id_list, msg_id, channel_id)
                      })
         })
-        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| {
+        .and_then(|(bot, chat_id, user_id, admin_id_list, msg_id, channel_id)| {
             futures::future::result(if admin_id_list.contains(&bot.inner.id) {
-                                        Ok((bot, admin_id_list, msg_id, channel_id))
+                                        Ok((bot, chat_id, user_id, admin_id_list, msg_id, channel_id))
                                     } else {
                                         Err((bot, chat_id, msg_id))
                                     })
@@ -154,7 +154,7 @@ fn check_channel<'a>(bot: telebot::RcBot,
                                   })
                     })
         })
-        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| {
+        .and_then(|(bot, chat_id, user_id, admin_id_list, msg_id, channel_id)| {
             futures::future::result(if admin_id_list.contains(&user_id) {
                                         Ok(channel_id)
                                     } else {
