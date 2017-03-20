@@ -279,7 +279,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                     let feed_link = feed.link.clone();
                     let db = db.clone();
                     let bot = bot.clone();
-                    let r = m.map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+                    let r = m.or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
                         match e {
                             telebot::error::Error::Telegram(ref s)
                                 if shoud_unsubscribe_for_user(s) => {
@@ -291,11 +291,11 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                                              format!("无法修复的错误 ({}), 自动退订",
                                                      s))
                                     .send()
-                                    .then(|_| Ok(())))
+                                    .then(|_| Err(())))
                             }
                             _ => {
                                 warn!("failed to send error to {}, {:?}", subscriber, e);
-                                futures::future::ok(()).boxed()
+                                Box::new(futures::future::err(()))
                             }
                         }
                     });
@@ -338,7 +338,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let db = db.clone();
                 let bot = bot.clone();
                 let r = send_multiple_messages(&bot, subscriber, &msgs)
-                    .map_err(move |e| -> Box<Future<Item = (), Error = ()>> {
+                    .or_else(move |e| -> Box<Future<Item = _, Error = ()>> {
                         match e {
                             telebot::error::Error::Telegram(ref s)
                                 if shoud_unsubscribe_for_user(s) => {
@@ -350,11 +350,11 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                                              format!("无法修复的错误 ({}), 自动退订",
                                                      s))
                                     .send()
-                                    .then(|_| Ok(())))
+                                    .then(|_| Err(())))
                             }
                             _ => {
                                 warn!("failed to send updates to {}, {:?}", subscriber, e);
-                                futures::future::ok(()).boxed()
+                                Box::new(futures::future::err(()))
                             }
                         }
                     });
