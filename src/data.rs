@@ -94,10 +94,11 @@ impl Database {
         self.feeds.iter().map(|(_, v)| v.clone()).collect()
     }
 
-    pub fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<&Feed>> {
+    pub fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<Feed>> {
         self.subscribers.get(&subscriber).map(|feeds| {
             feeds.iter()
                 .map(|feed_id| &self.feeds[feed_id])
+                .map(|feed| feed.clone())
                 .collect()
         })
     }

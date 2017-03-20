@@ -423,33 +423,40 @@ fn main() {
                     .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
             })
             .and_then(|(bot, db, subscriber, raw, chat_id)| {
-                let r: Box<Future<Item = _, Error = _>> = match db.borrow()
-                    .get_subscribed_feeds(subscriber) {
-                    Some(mut feeds) => {
+                futures::future::result(db.borrow()
+                        .get_subscribed_feeds(subscriber)
+                        .map({
+                            let bot = bot.clone();
+                            move |feeds| Ok((bot, raw, chat_id, feeds))
+                        })
+                        .unwrap_or(Err((bot, chat_id))))
+                    .or_else(|(bot, chat_id)| {
+                        bot.message(chat_id, "订阅列表为空".to_string())
+                            .send()
+                            .then(|r| match r {
+                                Ok(_) => Err(None),
+                                Err(e) => Err(Some(e)),
+                            })
+                    })
+                    .and_then(|(bot, raw, chat_id, mut feeds)| {
                         let text = String::from("订阅列表:");
-                        if !raw {
+                        let f = if !raw {
                             feeds.sort_by_key(|feed| pinyin_order::as_pinyin(&feed.title));
                             let msgs = format_and_split_msgs(text, &feeds, |feed| {
                                 format!("<a href=\"{}\">{}</a>",
                                         EscapeUrl(&feed.link),
                                         Escape(&feed.title))
                             });
-                            Box::new(send_multiple_messages(&bot, chat_id, &msgs))
+                            send_multiple_messages(&bot, chat_id, &msgs)
                         } else {
-                            feeds.sort_by_key(|feed| &feed.link);
+                            feeds.sort_by(|a, b| a.link.cmp(&b.link));
                             let msgs = format_and_split_msgs(text, &feeds, |feed| {
                                 format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
                             });
-                            Box::new(send_multiple_messages(&bot, chat_id, &msgs))
-                        }
-                    }
-                    None => {
-                        Box::new(bot.message(chat_id, "订阅列表为空".to_string())
-                            .send()
-                            .map(|_| ()))
-                    }
-                };
-                r.map_err(|e| Some(e))
+                            send_multiple_messages(&bot, chat_id, &msgs)
+                        };
+                        f.map_err(|e| Some(e))
+                    })
             })
             .then(|result| match result {
                 Err(Some(err)) => {
