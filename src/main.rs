@@ -56,15 +56,15 @@ fn check_channel<'a>(bot: telebot::RcBot,
                      -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
     let channel = channel.parse::<i64>()
         .map(|_| if !channel.starts_with("-100") {
-            format!("-100{}", channel)
-        } else {
-            channel.to_owned()
-        })
+                 format!("-100{}", channel)
+             } else {
+                 channel.to_owned()
+             })
         .unwrap_or_else(|_| if !channel.starts_with("@") {
-            format!("@{}", channel)
-        } else {
-            channel.to_owned()
-        });
+                            format!("@{}", channel)
+                        } else {
+                            channel.to_owned()
+                        });
     bot.message(chat_id, "正在验证 Channel".to_string())
         .send()
         .map_err(|e| Some(e))
@@ -72,93 +72,111 @@ fn check_channel<'a>(bot: telebot::RcBot,
             let msg_id = msg.message_id;
             bot.get_chat_string(channel)
                 .send()
-                .or_else(move |e| -> Box<Future<Item = _, Error = Option<telebot::Error>>> {
-                    match e {
-                        telebot::Error::Telegram(err_msg) => {
-                            Box::new(bot.edit_message_text(chat_id,
-                                                   msg_id,
-                                                           format!("无法找到目标 Channel: {}",
-                                                                   err_msg))
-                                .send()
-                                .then(|result| match result {
-                                    Ok(_) => futures::future::err(None),
-                                    Err(e) => futures::future::err(Some(e)),
-                                }))
-                        }
-                        _ => Box::new(futures::future::err(Some(e))),
-                    }
+                .or_else(move |e| {
+                    futures::future::result(if let telebot::Error::Telegram(err_msg) = e {
+                                                Err((bot, chat_id, msg_id, err_msg))
+                                            } else {
+                                                Ok(e)
+                                            })
+                            .or_else(|(bot, chat_id, msg_id, err_msg)| {
+                                bot.edit_message_text(chat_id,
+                                                       msg_id,
+                                                       format!("无法找到目标 Channel: {}",
+                                                               err_msg))
+                                    .send()
+                                    .then(|result| match result {
+                                              Ok(_) => futures::future::err(None),
+                                              Err(e) => futures::future::err(Some(e)),
+                                          })
+                            })
+                            .and_then(|e| Err(Some(e)))
                 })
                 .map(move |(bot, channel)| (bot, channel, msg_id))
         })
-        .and_then(move |(bot, channel, msg_id)| -> Box<Future<Item = _, Error = Option<_>>> {
-            if channel.kind != "channel" {
-                Box::new(bot.message(chat_id, "目标需为 Channel".to_string())
-                    .send()
-                    .then(|result| match result {
-                        Ok(_) => Err(None),
-                        Err(e) => Err(Some(e)),
-                    }))
-            } else {
-                let channel_id = channel.id;
-                Box::new(bot.unban_chat_administrators(channel_id)
-                    .send()
-                    .or_else(move |e| -> Box<Future<Item = _, Error = Option<_>>> {
-                        match e {
-                            telebot::Error::Telegram(error_msg) => {
-                                Box::new(
-                                    bot.edit_message_text(
-                                        chat_id,
-                                        msg_id,
-                                        format!("请先将本 Bot 加入目标 Channel\
-                                                 并设为管理员: {}",
-                                                error_msg))
+        .and_then(move |(bot, channel, msg_id)| {
+            futures::future::result(if channel.kind == "channel" {
+                                        Ok((bot, chat_id, channel.id, msg_id))
+                                    } else {
+                                        Err((bot, chat_id, msg_id))
+                                    })
+                    .or_else(|(bot, chat_id, msg_id)| {
+                        bot.edit_message_text(chat_id, msg_id, "目标需为 Channel".to_string())
+                            .send()
+                            .then(|result| match result {
+                                      Ok(_) => Err(None),
+                                      Err(e) => Err(Some(e)),
+                                  })
+                    })
+        })
+        .and_then(|(bot, chat_id, channel_id, msg_id)| {
+            bot.unban_chat_administrators(channel_id)
+                .send()
+                .or_else(move |e| {
+                    futures::future::result(if let telebot::Error::Telegram(err_msg) = e {
+                                                Err((bot, chat_id, msg_id, err_msg))
+                                            } else {
+                                                Ok(e)
+                                            })
+                            .or_else(|(bot, chat_id, msg_id, err_msg)| {
+                                bot.edit_message_text(chat_id,
+                                              msg_id,
+                                              format!("请先将本 Bot 加入目标 Channel\
+                                                       并设为管理员: {}",
+                                                      err_msg))
                                     .send()
                                     .then(|result| match result {
                                         Ok(_) => futures::future::err(None),
                                         Err(e) => futures::future::err(Some(e)),
-                                    }))
-                            }
-                            _ => Box::new(futures::future::err(Some(e))),
-                        }
-                    })
-                    .map(move |(bot, admins)| {
-                        let admin_id_list = admins.
-                            iter()
-                            .map(|member| member.user.id).collect::<Vec<i64>>();
-                        (bot, admin_id_list, msg_id, channel_id)
-                    }))
-            }
+                                    })
+                            })
+                            .and_then(|e| Err(Some(e)))
+                })
+                .map(move |(bot, admins)| {
+                         let admin_id_list =
+                        admins.iter().map(|member| member.user.id).collect::<Vec<i64>>();
+                         (bot, admin_id_list, msg_id, channel_id)
+                     })
         })
-        .and_then(move |(bot, admin_id_list, msg_id, channel_id)|
-                         -> Box<Future<Item = i64, Error = Option<_>>> {
-            if admin_id_list.contains(&bot.inner.id) {
-                if admin_id_list.contains(&user_id) {
-                    Box::new(futures::future::ok(channel_id))
-                } else {
-                    Box::new(bot.edit_message_text(chat_id,
-                                           msg_id,
-                                           "该命令只能由 Channel 管理员使用".to_string())
-                        .send()
-                        .then(|result| match result {
-                            Ok(_) => futures::future::err(None),
-                            Err(e) => futures::future::err(Some(e)),
-                        }))
-                }
-            } else {
-                Box::new(bot.edit_message_text(chat_id, msg_id,
+        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| {
+            futures::future::result(if admin_id_list.contains(&bot.inner.id) {
+                                        Ok((bot, admin_id_list, msg_id, channel_id))
+                                    } else {
+                                        Err((bot, chat_id, msg_id))
+                                    })
+                    .or_else(|(bot, chat_id, msg_id)| {
+                        bot.edit_message_text(chat_id,
+                                               msg_id,
                                                "请将本 Bot 设为管理员".to_string())
-                    .send()
-                    .then(|result| match result {
-                        Ok(_) => futures::future::err(None),
-                        Err(e) => futures::future::err(Some(e)),
-                    }))
-            }
+                            .send()
+                            .then(|result| match result {
+                                      Ok(_) => futures::future::err(None),
+                                      Err(e) => futures::future::err(Some(e)),
+                                  })
+                    })
+        })
+        .and_then(move |(bot, admin_id_list, msg_id, channel_id)| {
+            futures::future::result(if admin_id_list.contains(&user_id) {
+                                        Ok(channel_id)
+                                    } else {
+                                        Err((bot, chat_id, msg_id))
+                                    })
+                    .or_else(|(bot, chat_id, msg_id)| {
+                        bot.edit_message_text(chat_id,
+                                               msg_id,
+                                               "该命令只能由 Channel 管理员使用"
+                                                   .to_string())
+                            .send()
+                            .then(|result| match result {
+                                      Ok(_) => futures::future::err(None),
+                                      Err(e) => futures::future::err(Some(e)),
+                                  })
+                    })
         })
         .then(|result| match result {
-            Err(None) => futures::future::ok(None),
-            Err(Some(e)) => futures::future::err(e),
-            Ok(ok) => futures::future::ok(Some(ok)),
-        })
+                  Err(None) => futures::future::ok(None),
+                  Err(Some(e)) => futures::future::err(e),
+                  Ok(ok) => futures::future::ok(Some(ok)),
+              })
 }
 
 fn to_chinese_error_msg(e: errors::Error) -> String {
