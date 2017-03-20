@@ -20,8 +20,6 @@ extern crate regex;
 extern crate pinyin_order;
 
 use std::io::prelude::*;
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::time::Duration;
 
 use telebot::functions::*;
@@ -249,7 +247,7 @@ fn format_and_split_msgs<T, F>(head: String, data: &[T], line_format_fn: F) -> V
 }
 
 fn fetch_feed_updates<'a>(bot: telebot::RcBot,
-                          db: Rc<RefCell<data::Database>>,
+                          db: data::Database,
                           session: Session,
                           feed: data::Feed)
                           -> impl Future<Item = (), Error = ()> + 'a {
@@ -260,14 +258,14 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
     feed::fetch_feed(session, feed.link.to_owned())
         .map(move |rss| (bot_, db_, rss, feed_))
         .or_else(move |e| {
-            futures::future::result(if db.borrow_mut().inc_error_count(&feed.link) > 1440 {
+            futures::future::result(if db.inc_error_count(&feed.link) > 1440 {
                                         Err((bot, db, feed))
                                     } else {
                                         Ok(())
                                     })
                     .or_else(|(bot, db, feed)| {
                         // 1440 * 5 minute = 5 days
-                        db.borrow_mut().reset_error_count(&feed.link);
+                        db.reset_error_count(&feed.link);
                         let err_msg = to_chinese_error_msg(e);
                         let mut msgs = Vec::with_capacity(feed.subscribers.len());
                         for &subscriber in &feed.subscribers {
@@ -286,25 +284,24 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                             let bot = bot.clone();
                             let r = m.or_else(move |e| {
                                 futures::future::result(match e {
-                                    telebot::error::Error::Telegram(ref s)
+                                                            telebot::error::Error::Telegram(ref s)
                                         if shoud_unsubscribe_for_user(s) => {
                                             Err((bot, db, s.to_owned(), subscriber, feed_link))
                                         }
-                                    _ => {
-                                        warn!("failed to send error to {}, {:?}", subscriber, e);
-                                        Ok(())
-                                    }
-                                })
-                            .or_else(|(bot, db, s, subscriber, feed_link)| {
-                                if let Err(e) = db.borrow_mut()
-                                    .unsubscribe(subscriber, &feed_link) {
-                                    log_error(&e);
+                                                            _ => {
+                                    warn!("failed to send error to {}, {:?}", subscriber, e);
+                                    Ok(())
                                 }
-                                bot.message(subscriber,
+                                                        })
+                                        .or_else(|(bot, db, s, subscriber, feed_link)| {
+                                            if let Err(e) = db.unsubscribe(subscriber, &feed_link) {
+                                                log_error(&e);
+                                            }
+                                            bot.message(subscriber,
                                             format!("无法修复的错误 ({}), 自动退订", s))
                                     .send()
                                     .then(|_| Err(()))
-                            })
+                                        })
                                         .and_then(|_| Err(()))
                             });
                             // if not use Box, rustc will panic
@@ -316,9 +313,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
         })
         .and_then(|(bot, db, rss, feed)| {
             if rss.title != feed.title {
-                db.borrow_mut().update_title(&feed.link, &rss.title);
+                db.update_title(&feed.link, &rss.title);
             }
-            let updates = db.borrow_mut().update(&feed.link, rss.items);
+            let updates = db.update(&feed.link, rss.items);
             if updates.is_empty() {
                 futures::future::err(())
             } else {
@@ -357,14 +354,13 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                     }
                                             })
                             .or_else(|(bot, db, s, subscriber, feed_link)| {
-                                if let Err(e) =
-                                    db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                                if let Err(e) = db.unsubscribe(subscriber, &feed_link) {
                                     log_error(&e);
                                 }
-                                Box::new(bot.message(subscriber,
-                                            format!("无法修复的错误 ({}), 自动退订", s))
-                                     .send()
-                                     .then(|_| Err(())))
+                                bot.message(subscriber,
+                                             format!("无法修复的错误 ({}), 自动退订", s))
+                                    .send()
+                                    .then(|_| Err(()))
                             })
                 });
                 msg_futures.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
@@ -385,18 +381,18 @@ fn main() {
     let datafile = &args[1];
     let token = &args[2];
 
-    let db = Rc::new(RefCell::new(data::Database::open(datafile)
-                                      .map_err(|e| {
-        writeln!(&mut std::io::stderr(), "error: {}", e).unwrap();
-        for e in e.iter().skip(1) {
-            writeln!(&mut std::io::stderr(), "caused by: {}", e).unwrap();
-        }
-        if let Some(backtrace) = e.backtrace() {
-            writeln!(&mut std::io::stderr(), "backtrace: {:?}", backtrace).unwrap();
-        }
-        std::process::exit(1);
-    })
-                                      .unwrap()));
+    let db = data::Database::open(datafile)
+        .map_err(|e| {
+            writeln!(&mut std::io::stderr(), "error: {}", e).unwrap();
+            for e in e.iter().skip(1) {
+                writeln!(&mut std::io::stderr(), "caused by: {}", e).unwrap();
+            }
+            if let Some(backtrace) = e.backtrace() {
+                writeln!(&mut std::io::stderr(), "backtrace: {:?}", backtrace).unwrap();
+            }
+            std::process::exit(1);
+        })
+        .unwrap();
 
     env_logger::init().unwrap();
 
@@ -462,8 +458,7 @@ fn main() {
                              .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
             })
             .and_then(|(bot, db, subscriber, raw, chat_id)| {
-                futures::future::result(db.borrow()
-                                            .get_subscribed_feeds(subscriber)
+                futures::future::result(db.get_subscribed_feeds(subscriber)
                                             .map({
                                                      let bot = bot.clone();
                                                      move |feeds| Ok((bot, raw, chat_id, feeds))
@@ -555,7 +550,7 @@ fn main() {
                                   }))
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
-                futures::future::result(if db.borrow().is_subscribed(subscriber, &feed_link) {
+                futures::future::result(if db.is_subscribed(subscriber, &feed_link) {
                                             Ok((bot, db, subscriber, feed_link, chat_id, lphandle))
                                         } else {
                                             Err((bot, chat_id))
@@ -585,7 +580,7 @@ fn main() {
                     })
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id, feed)| {
-                let r = match db.borrow_mut().subscribe(subscriber, &feed_link, &feed) {
+                let r = match db.subscribe(subscriber, &feed_link, &feed) {
                     Ok(_) => {
                         bot.message(chat_id,
                                      format!("《<a href=\"{}\">{}</a>》订阅成功",
@@ -656,7 +651,7 @@ fn main() {
                              .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id)| {
-                let r = match db.borrow_mut().unsubscribe(subscriber, &feed_link) {
+                let r = match db.unsubscribe(subscriber, &feed_link) {
                     Ok(feed) => {
                         bot.message(chat_id,
                                      format!("《<a href=\"{}\">{}</a>》退订成功",
@@ -694,8 +689,7 @@ fn main() {
                               if let Some(ref title) = m.lines().next() {
                                   if let Some(ref feed_link) =
                             {
-                                let r = db.borrow()
-                                    .get_subscribed_feeds(msg.chat.id)
+                                let r = db.get_subscribed_feeds(msg.chat.id)
                                     .unwrap_or_default()
                                     .iter()
                                     .filter(|feed| &feed.title == title)
@@ -703,7 +697,7 @@ fn main() {
                                     .next();
                                 r
                             } {
-                                      match db.borrow_mut().unsubscribe(msg.chat.id, &feed_link) {
+                                      match db.unsubscribe(msg.chat.id, &feed_link) {
                                           Ok(feed) => {
                                     bot.message(msg.chat.id,
                                                  format!("《<a href=\"{}\">{}</a>》退订成功",
@@ -755,7 +749,7 @@ fn main() {
         lp.handle().spawn(Interval::new(Duration::from_secs(300), &lp.handle())
                               .expect("failed to start feed loop")
                               .for_each(move |_| {
-            let feeds = db.borrow().get_all_feeds();
+            let feeds = db.get_all_feeds();
             let session = Session::new(handle.clone());
             for feed in feeds {
                 handle.spawn(fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed));
