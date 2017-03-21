@@ -85,8 +85,8 @@ fn check_channel<'a>(bot: telebot::RcBot,
                                                            err_msg))
                                 .send()
                                 .then(|result| match result {
-                                          Ok(_) => futures::future::err(None),
-                                          Err(e) => futures::future::err(Some(e)),
+                                          Ok(_) => Err(None),
+                                          Err(e) => Err(Some(e)),
                                       })
                         })
                         .and_then(|e| Err(Some(e)))
@@ -127,8 +127,8 @@ fn check_channel<'a>(bot: telebot::RcBot,
                                                            err_msg))
                                 .send()
                                 .then(|result| match result {
-                                          Ok(_) => futures::future::err(None),
-                                          Err(e) => futures::future::err(Some(e)),
+                                          Ok(_) => Err(None),
+                                          Err(e) => Err(Some(e)),
                                       })
                         })
                         .and_then(|e| Err(Some(e)))
@@ -152,8 +152,8 @@ fn check_channel<'a>(bot: telebot::RcBot,
                                            "请将本 Bot 设为管理员".to_string())
                         .send()
                         .then(|result| match result {
-                                  Ok(_) => futures::future::err(None),
-                                  Err(e) => futures::future::err(Some(e)),
+                                  Ok(_) => Err(None),
+                                  Err(e) => Err(Some(e)),
                               })
                 })
         })
@@ -170,15 +170,15 @@ fn check_channel<'a>(bot: telebot::RcBot,
                                            "该命令只能由 Channel 管理员使用".to_string())
                         .send()
                         .then(|result| match result {
-                                  Ok(_) => futures::future::err(None),
-                                  Err(e) => futures::future::err(Some(e)),
+                                  Ok(_) => Err(None),
+                                  Err(e) => Err(Some(e)),
                               })
                 })
         })
         .then(|result| match result {
-                  Err(None) => futures::future::ok(None),
-                  Err(Some(e)) => futures::future::err(e),
-                  Ok(ok) => futures::future::ok(Some(ok)),
+                  Err(None) => Ok(None),
+                  Err(Some(e)) => Err(e),
+                  Ok(ok) => Ok(Some(ok)),
               })
 }
 
@@ -480,22 +480,22 @@ fn main() {
             })
             .and_then(|(bot, raw, chat_id, mut feeds)| {
                 let text = String::from("订阅列表:");
-                let f = if !raw {
-                    feeds.sort_by_key(|feed| pinyin_order::as_pinyin(&feed.title));
-                    let msgs = format_and_split_msgs(text, &feeds, |feed| {
-                        format!("<a href=\"{}\">{}</a>",
-                                EscapeUrl(&feed.link),
-                                Escape(&feed.title))
-                    });
-                    send_multiple_messages(&bot, chat_id, &msgs)
-                } else {
-                    feeds.sort_by(|a, b| a.link.cmp(&b.link));
-                    let msgs = format_and_split_msgs(text, &feeds, |feed| {
-                        format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
-                    });
-                    send_multiple_messages(&bot, chat_id, &msgs)
-                };
-                f.map_err(|e| Some(e))
+                if !raw {
+                        feeds.sort_by_key(|feed| pinyin_order::as_pinyin(&feed.title));
+                        let msgs = format_and_split_msgs(text, &feeds, |feed| {
+                            format!("<a href=\"{}\">{}</a>",
+                                    EscapeUrl(&feed.link),
+                                    Escape(&feed.title))
+                        });
+                        send_multiple_messages(&bot, chat_id, &msgs)
+                    } else {
+                        feeds.sort_by(|a, b| a.link.cmp(&b.link));
+                        let msgs = format_and_split_msgs(text, &feeds, |feed| {
+                            format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
+                        });
+                        send_multiple_messages(&bot, chat_id, &msgs)
+                    }
+                    .map_err(|e| Some(e))
             })
             .then(|result| match result {
                       Err(Some(err)) => {
@@ -586,22 +586,22 @@ fn main() {
                     })
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id, feed)| {
-                let r = match db.subscribe(subscriber, &feed_link, &feed) {
-                    Ok(_) => {
-                        bot.message(chat_id,
-                                     format!("《<a href=\"{}\">{}</a>》订阅成功",
-                                             EscapeUrl(&feed.link),
-                                             Escape(&feed.title)))
-                            .parse_mode("HTML")
-                            .disable_web_page_preview(true)
-                            .send()
+                match db.subscribe(subscriber, &feed_link, &feed) {
+                        Ok(_) => {
+                            bot.message(chat_id,
+                                         format!("《<a href=\"{}\">{}</a>》订阅成功",
+                                                 EscapeUrl(&feed.link),
+                                                 Escape(&feed.title)))
+                                .parse_mode("HTML")
+                                .disable_web_page_preview(true)
+                                .send()
+                        }
+                        Err(e) => {
+                            log_error(&e);
+                            bot.message(chat_id, format!("error: {}", e)).send()
+                        }
                     }
-                    Err(e) => {
-                        log_error(&e);
-                        bot.message(chat_id, format!("error: {}", e)).send()
-                    }
-                };
-                r.map_err(|e| Some(e))
+                    .map_err(|e| Some(e))
             })
             .then(|result| match result {
                       Err(Some(err)) => {
@@ -657,25 +657,25 @@ fn main() {
                              .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id)| {
-                let r = match db.unsubscribe(subscriber, &feed_link) {
-                    Ok(feed) => {
-                        bot.message(chat_id,
-                                     format!("《<a href=\"{}\">{}</a>》退订成功",
-                                             EscapeUrl(&feed.link),
-                                             Escape(&feed.title)))
-                            .parse_mode("HTML")
-                            .disable_web_page_preview(true)
-                            .send()
+                match db.unsubscribe(subscriber, &feed_link) {
+                        Ok(feed) => {
+                            bot.message(chat_id,
+                                         format!("《<a href=\"{}\">{}</a>》退订成功",
+                                                 EscapeUrl(&feed.link),
+                                                 Escape(&feed.title)))
+                                .parse_mode("HTML")
+                                .disable_web_page_preview(true)
+                                .send()
+                        }
+                        Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
+                            bot.message(chat_id, "未订阅过的 RSS".to_string()).send()
+                        }
+                        Err(e) => {
+                            log_error(&e);
+                            bot.message(chat_id, format!("error: {}", e)).send()
+                        }
                     }
-                    Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
-                        bot.message(chat_id, "未订阅过的 RSS".to_string()).send()
-                    }
-                    Err(e) => {
-                        log_error(&e);
-                        bot.message(chat_id, format!("error: {}", e)).send()
-                    }
-                };
-                r.map_err(|e| Some(e))
+                    .map_err(|e| Some(e))
             })
             .then(|result| match result {
                       Err(Some(err)) => {
@@ -690,52 +690,89 @@ fn main() {
     {
         let db = db.clone();
         let handle = bot.new_cmd("/unsubthis")
-            .and_then(move |(bot, msg)| if let Some(ref reply_msg) = msg.reply_to_message {
-                          if let Some(ref m) = reply_msg.text {
-                              if let Some(ref title) = m.lines().next() {
-                                  if let Some(ref feed_link) =
-                            db.get_subscribed_feeds(msg.chat.id)
-                                .unwrap_or_default()
-                                .iter()
-                                .filter(|feed| &feed.title == title)
-                                .map(|feed| feed.link.clone())
-                                .next() {
-                                      match db.unsubscribe(msg.chat.id, &feed_link) {
-                                          Ok(feed) => {
-                                    bot.message(msg.chat.id,
-                                                 format!("《<a href=\"{}\">{}</a>》退订成功",
-                                                         EscapeUrl(&feed.link),
-                                                         Escape(&feed.title)))
-                                        .parse_mode("HTML")
-                                        .disable_web_page_preview(true)
-                                        .send()
-                                }
-                                          Err(e) => {
-                                log_error(&e);
-                                bot.message(msg.chat.id, format!("error: {}", e)).send()
-                            }
-                                      }
-                                  } else {
-                                      bot.message(msg.chat.id, "无法找到此订阅".to_string())
-                                          .send()
-                                  }
-                              } else {
-                                  bot.message(msg.chat.id, "无法识别的消息".to_string())
-                                      .send()
-                              }
-                          } else {
-                              bot.message(msg.chat.id, "无法识别的消息".to_string()).send()
-                          }
-                      } else {
-                          bot.message(msg.chat.id,
-                                      "使用方法: \
-                                       使用此命令回复想要退订的 RSS 消息即可退订,\
-                                       不支持 Channel"
-                                              .to_string())
-                              .send()
-                      })
+            .map_err(|e| Some(e))
+            .and_then(move |(bot, msg)| {
+                if let Some(reply_msg) = msg.reply_to_message {
+                        Ok((bot, db.clone(), msg.chat.id, reply_msg))
+                    } else {
+                        Err((bot, msg.chat.id))
+                    }
+                    .into_future()
+                    .or_else(|(bot, chat_id)| {
+                        bot.message(chat_id,
+                                     "使用方法: \
+                                      使用此命令回复想要退订的 RSS 消息即可退订,\
+                                      不支持 Channel"
+                                             .to_string())
+                            .send()
+                            .then(|result| match result {
+                                      Ok(_) => Err(None),
+                                      Err(e) => Err(Some(e)),
+                                  })
+                    })
+
+            })
+            .and_then(|(bot, db, chat_id, reply_msg)| {
+                if let Some(m) = reply_msg.text {
+                        if let Some(title) = m.lines().next() {
+                            Ok((bot, db, chat_id, title.to_string()))
+                        } else {
+                            Err((bot, chat_id))
+                        }
+                    } else {
+                        Err((bot, chat_id))
+                    }
+                    .into_future()
+                    .or_else(|(bot, chat_id)| {
+                        bot.message(chat_id, "无法识别的消息".to_string())
+                            .send()
+                            .then(|result| match result {
+                                      Ok(_) => Err(None),
+                                      Err(e) => Err(Some(e)),
+                                  })
+                    })
+            })
+            .and_then(|(bot, db, chat_id, title)| {
+                if let Some(feed_link) = db.get_subscribed_feeds(chat_id)
+                           .unwrap_or_default()
+                           .iter()
+                           .filter(|feed| feed.title == title)
+                           .map(|feed| feed.link.clone())
+                           .next() {
+                        Ok((bot, db, chat_id, feed_link))
+                    } else {
+                        Err((bot, chat_id))
+                    }
+                    .into_future()
+                    .or_else(|(bot, chat_id)| {
+                        bot.message(chat_id, "无法找到此订阅".to_string())
+                            .send()
+                            .then(|result| match result {
+                                      Ok(_) => Err(None),
+                                      Err(e) => Err(Some(e)),
+                                  })
+                    })
+            })
+            .and_then(|(bot, db, chat_id, feed_link)| {
+                match db.unsubscribe(chat_id, &feed_link) {
+                        Ok(feed) => {
+                            bot.message(chat_id,
+                                         format!("《<a href=\"{}\">{}</a>》退订成功",
+                                                 EscapeUrl(&feed.link),
+                                                 Escape(&feed.title)))
+                                .parse_mode("HTML")
+                                .disable_web_page_preview(true)
+                                .send()
+                        }
+                        Err(e) => {
+                            log_error(&e);
+                            bot.message(chat_id, format!("error: {}", e)).send()
+                        }
+                    }
+                    .map_err(|e| Some(e))
+            })
             .then(|result| match result {
-                      Err(err) => {
+                      Err(Some(err)) => {
                 error!("telebot: {:?}", err);
                 Ok::<(), ()>(())
             }
