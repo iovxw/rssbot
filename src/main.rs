@@ -694,15 +694,12 @@ fn main() {
                           if let Some(ref m) = reply_msg.text {
                               if let Some(ref title) = m.lines().next() {
                                   if let Some(ref feed_link) =
-                            {
-                                let r = db.get_subscribed_feeds(msg.chat.id)
-                                    .unwrap_or_default()
-                                    .iter()
-                                    .filter(|feed| &feed.title == title)
-                                    .map(|feed| feed.link.clone())
-                                    .next();
-                                r
-                            } {
+                            db.get_subscribed_feeds(msg.chat.id)
+                                .unwrap_or_default()
+                                .iter()
+                                .filter(|feed| &feed.title == title)
+                                .map(|feed| feed.link.clone())
+                                .next() {
                                       match db.unsubscribe(msg.chat.id, &feed_link) {
                                           Ok(feed) => {
                                     bot.message(msg.chat.id,
