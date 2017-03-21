@@ -551,9 +551,9 @@ fn main() {
             })
             .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
                 futures::future::result(if db.is_subscribed(subscriber, &feed_link) {
-                                            Ok((bot, db, subscriber, feed_link, chat_id, lphandle))
-                                        } else {
                                             Err((bot, chat_id))
+                                        } else {
+                                            Ok((bot, db, subscriber, feed_link, chat_id, lphandle))
                                         })
                         .or_else(|(bot, chat_id)| {
                             bot.message(chat_id, "已订阅过的 RSS".to_string())
