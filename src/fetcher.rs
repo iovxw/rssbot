@@ -1,29 +1,77 @@
 use std::time::Duration;
+use std::collections::HashMap;
 
 use telebot;
 use telebot::functions::*;
-use tokio_core::reactor::{Interval, Handle};
+use tokio_core::reactor::{Interval, Handle, Timeout};
 use futures::{self, Future, Stream, IntoFuture};
 use tokio_curl::Session;
+use regex::Regex;
 
 use data;
 use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs, to_chinese_error_msg,
             truncate_message, log_error, TELEGRAM_MAX_MSG_LEN};
 
+// 5 minute
+const FREQUENCY_SECOND: u64 = 300;
+
+lazy_static!{
+    // it's different from `feed::HOST`, so maybe need a better name?
+    static ref HOST: Regex = Regex::new(r"^(?:https?://)?([^/]+)").unwrap();
+}
+
 pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
-    // 5 minute
-    handle.clone().spawn(Interval::new(Duration::from_secs(300), &handle)
+    handle.clone().spawn(Interval::new(Duration::from_secs(FREQUENCY_SECOND), &handle)
                              .expect("failed to start feed loop")
                              .for_each(move |_| {
         let feeds = db.get_all_feeds();
-        let session = Session::new(handle.clone());
-        for feed in feeds {
-            handle.spawn(fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed));
-        }
-        Ok(())
+        let grouped_feeds = grouping_by_host(feeds);
+        let group_interval = FREQUENCY_SECOND / grouped_feeds.len() as u64;
+        let group_interval = if group_interval == 0 {
+            1
+        } else {
+            group_interval
+        };
+        let future: Box<Future<Item = _, Error = ()>> =
+            Box::new(futures::future::ok((bot.clone(), db.clone(), handle.clone())));
+        grouped_feeds.into_iter()
+            .fold(future, |future, feeds| {
+                let r = future.and_then(|(bot, db, handle)| {
+                        let session = Session::new(handle.clone());
+                        for feed in feeds {
+                            handle.spawn(fetch_feed_updates(bot.clone(),
+                                                            db.clone(),
+                                                            session.clone(),
+                                                            feed));
+                        }
+                        Ok((bot, db, handle))
+                    })
+                    .and_then(move |(bot, db, handle)| {
+                                  Timeout::new(Duration::from_secs(group_interval), &handle)
+                                      .expect("failed to start sleep")
+                                      .map(|_| (bot, db, handle))
+                                      .map_err(|e| error!("feed loop sleep error: {}", e))
+                              });
+                Box::new(r)
+            })
+            .then(|_| Ok(()))
     })
                              .map_err(|e| error!("feed loop error: {}", e)))
+}
+
+fn grouping_by_host(feeds: Vec<data::Feed>) -> Vec<Vec<data::Feed>> {
+    let mut result = HashMap::new();
+    for feed in feeds {
+        let host = get_host(&feed.link).to_owned();
+        let group = result.entry(host).or_insert_with(|| Vec::new());
+        group.push(feed);
+    }
+    result.into_iter().map(|(_, v)| v).collect()
+}
+
+fn get_host(url: &str) -> &str {
+    HOST.captures(url).map_or(url, |r| r.get(0).unwrap().as_str())
 }
 
 fn shoud_unsubscribe_for_user(tg_err_msg: &str) -> bool {
@@ -36,7 +84,6 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                           session: Session,
                           feed: data::Feed)
                           -> impl Future<Item = (), Error = ()> + 'a {
-    info!("fetching: {} {}", feed.title, feed.link);
     let bot_ = bot.clone();
     let db_ = db.clone();
     let feed_ = feed.clone();
@@ -130,28 +177,29 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let feed_link = feed.link.clone();
                 let db = db.clone();
                 let bot = bot.clone();
-                let r = send_multiple_messages(&bot, subscriber, &msgs).or_else(move |e| {
-                    match e {
-                            telebot::error::Error::Telegram(ref s)
+                let r = send_multiple_messages(&bot, subscriber, msgs.clone())
+                    .or_else(move |e| {
+                        match e {
+                                telebot::error::Error::Telegram(ref s)
                                 if shoud_unsubscribe_for_user(s) => {
                                 Err((bot, db, s.to_owned(), subscriber, feed_link))
                             }
-                            _ => {
-                                warn!("failed to send updates to {}, {:?}", subscriber, e);
-                                Ok(())
+                                _ => {
+                                    warn!("failed to send updates to {}, {:?}", subscriber, e);
+                                    Ok(())
+                                }
                             }
-                        }
-                        .into_future()
-                        .or_else(|(bot, db, s, subscriber, feed_link)| {
-                            if let Err(e) = db.unsubscribe(subscriber, &feed_link) {
-                                log_error(&e);
-                            }
-                            bot.message(subscriber,
-                                         format!("无法修复的错误 ({}), 自动退订", s))
-                                .send()
-                                .then(|_| Err(()))
-                        })
-                });
+                            .into_future()
+                            .or_else(|(bot, db, s, subscriber, feed_link)| {
+                                if let Err(e) = db.unsubscribe(subscriber, &feed_link) {
+                                    log_error(&e);
+                                }
+                                bot.message(subscriber,
+                                             format!("无法修复的错误 ({}), 自动退订", s))
+                                    .send()
+                                    .then(|_| Err(()))
+                            })
+                    });
                 msg_futures.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
             }
             futures::future::join_all(msg_futures).then(|_| Ok(()))

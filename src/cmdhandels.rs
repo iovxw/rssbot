@@ -98,13 +98,13 @@ fn register_rss(bot: telebot::RcBot, db: Database) {
                                 EscapeUrl(&feed.link),
                                 Escape(&feed.title))
                     });
-                    send_multiple_messages(&bot, chat_id, &msgs)
+                    send_multiple_messages(&bot, chat_id, msgs)
                 } else {
                     feeds.sort_by(|a, b| a.link.cmp(&b.link));
                     let msgs = format_and_split_msgs(text, &feeds, |feed| {
                         format!("{}: {}", Escape(&feed.title), Escape(&feed.link))
                     });
-                    send_multiple_messages(&bot, chat_id, &msgs)
+                    send_multiple_messages(&bot, chat_id, msgs)
                 }
                 .map_err(|e| Some(e))
         })

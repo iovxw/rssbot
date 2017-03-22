@@ -73,21 +73,21 @@ impl<'a> ::std::fmt::Display for EscapeUrl<'a> {
 
 pub fn send_multiple_messages<'a>(bot: &telebot::RcBot,
                                   target: i64,
-                                  messages: &[String])
+                                  messages: Vec<String>)
                                   -> impl Future<Item = (), Error = telebot::Error> + 'a {
-    let mut future: Box<Future<Item = telebot::RcBot, Error = telebot::Error>> =
+    let future: Box<Future<Item = telebot::RcBot, Error = telebot::Error>> =
         Box::new(futures::future::ok(bot.clone()));
-    for msg in messages {
-        let msg = msg.to_owned();
-        future = Box::new(future.and_then(move |bot| {
-            bot.message(target, msg)
-                .parse_mode("HTML")
-                .disable_web_page_preview(true)
-                .send()
-                .map(|(bot, _)| bot)
-        }));
-    }
-    future.map(|_| ())
+    messages.into_iter()
+        .fold(future, |future, msg| {
+            Box::new(future.and_then(move |bot| {
+                bot.message(target, msg)
+                    .parse_mode("HTML")
+                    .disable_web_page_preview(true)
+                    .send()
+                    .map(|(bot, _)| bot)
+            }))
+        })
+        .map(|_| ())
 }
 
 pub fn truncate_message(s: &str, max: usize) -> String {
