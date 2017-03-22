@@ -1,6 +1,6 @@
 use telebot;
 use telebot::functions::*;
-use futures::{self, Future};
+use futures::{self, Future, Stream};
 
 use errors;
 
@@ -75,19 +75,15 @@ pub fn send_multiple_messages<'a>(bot: &telebot::RcBot,
                                   target: i64,
                                   messages: Vec<String>)
                                   -> impl Future<Item = (), Error = telebot::Error> + 'a {
-    let future: Box<Future<Item = telebot::RcBot, Error = telebot::Error>> =
-        Box::new(futures::future::ok(bot.clone()));
-    messages.into_iter()
-        .fold(future, |future, msg| {
-            Box::new(future.and_then(move |bot| {
-                bot.message(target, msg)
-                    .parse_mode("HTML")
-                    .disable_web_page_preview(true)
-                    .send()
-                    .map(|(bot, _)| bot)
-            }))
-        })
-        .map(|_| ())
+    let bot = bot.clone();
+    let l = futures::stream::iter(messages.into_iter().map(|x| Ok(x)));
+    l.for_each(move |msg| {
+        bot.message(target, msg)
+            .parse_mode("HTML")
+            .disable_web_page_preview(true)
+            .send()
+            .map(|_| ())
+    })
 }
 
 pub fn truncate_message(s: &str, max: usize) -> String {

@@ -24,6 +24,7 @@ lazy_static!{
 pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
     handle.clone().spawn(Interval::new(Duration::from_secs(FREQUENCY_SECOND), &handle)
                              .expect("failed to start feed loop")
+                             .map_err(|e| error!("feed loop error: {}", e))
                              .for_each(move |_| {
         let feeds = db.get_all_feeds();
         let grouped_feeds = grouping_by_host(feeds);
@@ -33,31 +34,23 @@ pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
         } else {
             group_interval
         };
-        let future: Box<Future<Item = _, Error = ()>> =
-            Box::new(futures::future::ok((bot.clone(), db.clone(), handle.clone())));
-        grouped_feeds.into_iter()
-            .fold(future, |future, feeds| {
-                let r = future.and_then(|(bot, db, handle)| {
-                        let session = Session::new(handle.clone());
-                        for feed in feeds {
-                            handle.spawn(fetch_feed_updates(bot.clone(),
-                                                            db.clone(),
-                                                            session.clone(),
-                                                            feed));
-                        }
-                        Ok((bot, db, handle))
-                    })
-                    .and_then(move |(bot, db, handle)| {
-                                  Timeout::new(Duration::from_secs(group_interval), &handle)
-                                      .expect("failed to start sleep")
-                                      .map(|_| (bot, db, handle))
-                                      .map_err(|e| error!("feed loop sleep error: {}", e))
-                              });
-                Box::new(r)
-            })
-            .then(|_| Ok(()))
-    })
-                             .map_err(|e| error!("feed loop error: {}", e)))
+        let group_iter = futures::stream::iter(grouped_feeds.into_iter().map(|x| Ok(x)));
+        let handle2 = handle.clone();
+        let bot = bot.clone();
+        let db = db.clone();
+        let group_fetcher = group_iter.for_each(move |feeds| {
+            let session = Session::new(handle2.clone());
+            for feed in feeds {
+                let fetcher = fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed);
+                handle2.spawn(fetcher);
+            }
+            Timeout::new(Duration::from_secs(group_interval), &handle2)
+                .expect("failed to start sleep")
+                .map_err(|e| error!("feed loop sleep error: {}", e))
+        });
+        handle.spawn(group_fetcher);
+        Ok(())
+    }))
 }
 
 fn grouping_by_host(feeds: Vec<data::Feed>) -> Vec<Vec<data::Feed>> {
