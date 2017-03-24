@@ -28,12 +28,6 @@ pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
                              .for_each(move |_| {
         let feeds = db.get_all_feeds();
         let grouped_feeds = grouping_by_host(feeds);
-        let group_interval = FREQUENCY_SECOND / grouped_feeds.len() as u64;
-        let group_interval = if group_interval == 0 {
-            1
-        } else {
-            group_interval
-        };
         let group_iter = futures::stream::iter(grouped_feeds.into_iter().map(|x| Ok(x)));
         let handle2 = handle.clone();
         let bot = bot.clone();
@@ -44,7 +38,7 @@ pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
                 let fetcher = fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed);
                 handle2.spawn(fetcher);
             }
-            Timeout::new(Duration::from_secs(group_interval), &handle2)
+            Timeout::new(Duration::from_secs(1), &handle2)
                 .expect("failed to start sleep")
                 .map_err(|e| error!("feed loop sleep error: {}", e))
         });

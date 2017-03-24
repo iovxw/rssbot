@@ -26,7 +26,7 @@ pub struct Feed {
     pub title: String,
     pub error_count: u32,
     pub subscribers: HashSet<SubscriberID>,
-    hash_list: HashSet<u64>,
+    hash_list: Vec<u64>,
 }
 
 
@@ -155,12 +155,12 @@ impl DatabaseInner {
         self.reset_error_count(rss_link);
 
         let mut result = Vec::new();
-        let mut new_hash_list = HashSet::new();
+        let mut new_hash_list = Vec::new();
         let items_len = items.len();
         for item in items {
             let hash = gen_item_hash(&item);
-            new_hash_list.insert(hash);
             if !self.feeds[&feed_id].hash_list.contains(&hash) {
+                new_hash_list.push(hash);
                 result.push(item);
             }
         }
@@ -168,12 +168,12 @@ impl DatabaseInner {
             {
                 let max_size = items_len * 2;
                 let feed = self.feeds.get_mut(&feed_id).unwrap();
-                for old_hash in &feed.hash_list {
-                    new_hash_list.insert(*old_hash);
-                    if new_hash_list.len() >= max_size {
-                        break;
-                    }
-                }
+                let mut append: Vec<u64> = feed.hash_list
+                    .iter()
+                    .take(max_size - new_hash_list.len())
+                    .map(|x| *x)
+                    .collect();
+                new_hash_list.append(&mut append);
                 feed.hash_list = new_hash_list;
             }
             self.save().unwrap_or_default();
