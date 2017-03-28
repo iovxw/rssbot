@@ -168,8 +168,8 @@ pub struct Voice {
 pub struct Contact {
     pub phone_number: String,
     pub first_name: String,
-    pub last_name: String,
-    pub user_id: Integer,
+    pub last_name: Option<String>,
+    pub user_id: Option<Integer>,
 }
 
 /// This object represents a point on the map.
@@ -566,7 +566,8 @@ pub struct InlineQueryResultContact {
     pub id: String,
     pub phone_number: String,
     pub first_name: String,
-    pub last_name: String,
+    #[serde(skip_serializing_if="Option::is_none")]
+    pub last_name: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
     pub reply_markup: Option<InlineKeyboardMarkup>,
     #[serde(skip_serializing_if="Option::is_none")]
