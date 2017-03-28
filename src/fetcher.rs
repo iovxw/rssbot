@@ -28,21 +28,24 @@ pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
                              .for_each(move |_| {
         let feeds = db.get_all_feeds();
         let grouped_feeds = grouping_by_host(feeds);
-        let group_iter = futures::stream::iter(grouped_feeds.into_iter().map(|x| Ok(x)));
         let handle2 = handle.clone();
         let bot = bot.clone();
         let db = db.clone();
-        let group_fetcher = group_iter.for_each(move |feeds| {
-            let session = Session::new(handle2.clone());
-            for feed in feeds {
-                let fetcher = fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed);
-                handle2.spawn(fetcher);
-            }
-            Timeout::new(Duration::from_secs(1), &handle2)
-                .expect("failed to start sleep")
-                .map_err(|e| error!("feed loop sleep error: {}", e))
-        });
-        handle.spawn(group_fetcher);
+        let fetcher = futures::stream::iter(grouped_feeds.into_iter().map(|x| Ok(x)))
+            .for_each(move |group| {
+                let session = Session::new(handle2.clone());
+                let bot = bot.clone();
+                let db = db.clone();
+                let group_fetcher = futures::stream::iter(group.into_iter().map(|x| Ok(x)))
+                    .for_each(move |feed| {
+                                  fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed)
+                              });
+                handle2.spawn(group_fetcher);
+                Timeout::new(Duration::from_secs(1), &handle2)
+                    .expect("failed to start sleep")
+                    .map_err(|e| error!("feed loop sleep error: {}", e))
+            });
+        handle.spawn(fetcher);
         Ok(())
     }))
 }
