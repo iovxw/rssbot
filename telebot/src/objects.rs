@@ -10,9 +10,6 @@ pub type Integer = i64;
 pub type Vector<T> = Vec<T>;
 pub type NotImplemented = ();
 
-use erased_serde::Serialize;
-use uuid::Uuid;
-
 /// This object represents a Telegram user or bot.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {

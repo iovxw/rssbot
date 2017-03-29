@@ -64,12 +64,10 @@ extern crate serde_derive;
 
 extern crate serde;
 extern crate serde_json;
-extern crate erased_serde;
 extern crate curl;
 extern crate futures;
 extern crate tokio_core;
 extern crate tokio_curl;
-extern crate uuid;
 
 pub use bot::RcBot;
 pub use error::Error;

@@ -20,7 +20,6 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
     let config = config_from(&ast.attrs);
 
     let query_kind = config.get("query").map(|tmp| syn::Lit::from(tmp.as_str()));
-    let file_kind = config.get("file_kind").map(|tmp| syn::Ident::from(tmp.as_str()));
 
     let fields: Vec<_> = match ast.body {
         syn::Body::Struct(syn::VariantData::Struct(ref fields)) => {
@@ -83,8 +82,7 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
              })
         .collect();
 
-    let ty_compulsory: Vec<_> = fields.iter().map(|f| f.1).collect();
-    let ty_compulsory2: Vec<_> = fields.iter()
+    let ty_compulsory: Vec<_> = fields.iter()
         .filter(|f| f.0.as_ref() != "kind" && f.0.as_ref() != "id")
         .map(|f| f.1)
         .collect();
@@ -109,14 +107,11 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
 
     //println!("{:?}", ty_optional.first());
 
-    let trait_name = syn::Ident::from(format!("Function{}", name.as_ref()));
-    let wrapper_name = syn::Ident::from(format!("Wrapper{}", name.as_ref()));
-
     if let Some(query_name) = query_kind {
         quote! {
             impl #name {
                 #[allow(dead_code)]
-                pub fn new(#( #field_compulsory3: #ty_compulsory2, )*) -> #name {
+                pub fn new(#( #field_compulsory3: #ty_compulsory, )*) -> #name {
                     let id = Uuid::new_v4();
 
                     #name {
@@ -140,7 +135,7 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
         quote! {
             impl #name {
                 #[allow(dead_code)]
-                pub fn new(#( #field_compulsory3: #ty_compulsory2, )*) -> #name {
+                pub fn new(#( #field_compulsory3: #ty_compulsory, )*) -> #name {
                     #name { #( #field_compulsory2: #values, )* }
                 }
                 #(

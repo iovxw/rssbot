@@ -11,7 +11,6 @@ use error::Error;
 use file;
 use futures::Future;
 use std::rc::Rc;
-use erased_serde::Serialize;
 
 pub trait TelegramSendable {
     type Item;

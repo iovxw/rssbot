@@ -12,6 +12,5 @@ proc-macro = true
 test = false
 
 [dependencies]
-log = "0.3.6"
 syn = "0.11"
 quote = "0.3.3"
