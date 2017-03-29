@@ -148,19 +148,20 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
             }
         })
         .and_then(|(bot, db, feed, rss_title, rss_link, updates)| {
-            let msgs = format_and_split_msgs(format!("<b>{}</b>", rss_title), &updates, |item| {
-                let title = item.title
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or_else(|| &rss_title);
-                let link = item.link
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or_else(|| &rss_link);
-                format!("<a href=\"{}\">{}</a>",
-                        EscapeUrl(link),
-                        Escape(&truncate_message(title, TELEGRAM_MAX_MSG_LEN - 500)))
-            });
+            let msgs =
+                format_and_split_msgs(format!("<b>{}</b>", Escape(&rss_title)), &updates, |item| {
+                    let title = item.title
+                        .as_ref()
+                        .map(|s| s.as_str())
+                        .unwrap_or_else(|| &rss_title);
+                    let link = item.link
+                        .as_ref()
+                        .map(|s| s.as_str())
+                        .unwrap_or_else(|| &rss_link);
+                    format!("<a href=\"{}\">{}</a>",
+                            EscapeUrl(link),
+                            Escape(&truncate_message(title, TELEGRAM_MAX_MSG_LEN - 500)))
+                });
 
             let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
             for &subscriber in &feed.subscribers {
