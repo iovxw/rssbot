@@ -413,7 +413,7 @@ fn check_channel<'a>(bot: telebot::RcBot,
         .map_err(|e| Some(e))
         .and_then(move |(bot, msg)| {
             let msg_id = msg.message_id;
-            bot.get_chat_string(channel)
+            bot.get_chat(channel)
                 .send()
                 .or_else(move |e| {
                     if let telebot::Error::Telegram(err_msg) = e {

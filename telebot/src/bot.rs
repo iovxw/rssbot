@@ -176,8 +176,8 @@ impl Bot {
                 // try to parse the result as a JSON and find the OK field.
                 // If the ok field is true, then the string in "result" will be returned
                 if let Ok(req) = serde_json::from_str::<Value>(&x) {
-                    if let (Some(ok), res) = (req.find("ok").and_then(Value::as_bool),
-                                              req.find("result")) {
+                    if let (Some(ok), res) = (req.get("ok").and_then(Value::as_bool),
+                                              req.get("result")) {
                         if ok {
                             if let Some(result) = res {
                                 let answer = serde_json::to_string(result).unwrap();
@@ -186,7 +186,7 @@ impl Bot {
                             }
                         }
 
-                        match req.find("description").and_then(Value::as_str) {
+                        match req.get("description").and_then(Value::as_str) {
                             Some(err) => Err(Error::Telegram(err.into())),
                             None => Err(Error::Telegram("Unknown".into())),
                         }

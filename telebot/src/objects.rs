@@ -332,7 +332,7 @@ pub enum InlineQueryResult {
     Video(InlineQueryResultVideo),
     Voice(InlineQueryResultVoice)
 }*/
-
+/*
 #[derive(setter, Serialize)]
 #[query="Article"]
 pub struct InlineQueryResultArticle {
@@ -771,3 +771,4 @@ pub struct ChosenInlineResult {
     #[serde(skip_serializing_if="Option::is_none")]
     pub inline_message_id: Option<String>,
 }
+*/
