@@ -69,8 +69,8 @@ impl DatabaseInner {
         let feed_id = get_hash(rss_link);
         self.feeds
             .get_mut(&feed_id)
-            .unwrap()
-            .error_count = 0;
+            .map(|feed| feed.error_count = 0)
+            .unwrap_or_default();
     }
 
     fn is_subscribed(&self, subscriber: SubscriberID, rss_link: &str) -> bool {
@@ -151,6 +151,9 @@ impl DatabaseInner {
 
     fn update<'a>(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(rss_link);
+        if self.feeds.get(&feed_id).is_none() {
+            return Vec::new();
+        }
 
         self.reset_error_count(rss_link);
 
@@ -185,9 +188,8 @@ impl DatabaseInner {
         let feed_id = get_hash(rss_link);
         self.feeds
             .get_mut(&feed_id)
-            .unwrap()
-            .title = new_title.to_owned();
-        self.save().unwrap_or_default();
+            .map(|feed| feed.title = new_title.to_owned())
+            .unwrap_or_default();
     }
 
     fn save(&self) -> Result<()> {

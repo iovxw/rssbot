@@ -80,6 +80,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
     feed::fetch_feed(session, feed.link.to_owned())
         .map(move |rss| (bot_, db_, rss, feed_))
         .or_else(move |e| {
+            // 1440 * 5 minute = 5 days
             if db.inc_error_count(&feed.link) > 1440 {
                     Err((bot, db, feed))
                 } else {
@@ -87,7 +88,6 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 }
                 .into_future()
                 .or_else(|(bot, db, feed)| {
-                    // 1440 * 5 minute = 5 days
                     db.reset_error_count(&feed.link);
                     let err_msg = to_chinese_error_msg(e);
                     let mut msgs = Vec::with_capacity(feed.subscribers.len());
