@@ -11,7 +11,7 @@ use serde_json;
 use feed;
 use errors::*;
 
-fn get_hash<T: Hash>(t: T) -> u64 {
+fn get_hash<T: Hash>(t: &T) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::default();
     t.hash(&mut hasher);
     hasher.finish()
@@ -49,13 +49,13 @@ impl DatabaseInner {
         self.subscribers.get(&subscriber).map(|feeds| {
                                                   feeds.iter()
                                                       .map(|feed_id| &self.feeds[feed_id])
-                                                      .map(|feed| feed.clone())
+                                                      .cloned()
                                                       .collect()
                                               })
     }
 
     fn inc_error_count(&mut self, rss_link: &str) -> u32 {
-        let feed_id = get_hash(rss_link);
+        let feed_id = get_hash(&rss_link);
         self.feeds
             .get_mut(&feed_id)
             .map(|feed| {
@@ -66,7 +66,7 @@ impl DatabaseInner {
     }
 
     fn reset_error_count(&mut self, rss_link: &str) {
-        let feed_id = get_hash(rss_link);
+        let feed_id = get_hash(&rss_link);
         self.feeds
             .get_mut(&feed_id)
             .map(|feed| feed.error_count = 0)
@@ -76,7 +76,7 @@ impl DatabaseInner {
     fn is_subscribed(&self, subscriber: SubscriberID, rss_link: &str) -> bool {
         self.subscribers
             .get(&subscriber)
-            .map(|feeds| feeds.contains(&get_hash(rss_link)))
+            .map(|feeds| feeds.contains(&get_hash(&rss_link)))
             .unwrap_or(false)
     }
 
@@ -85,10 +85,9 @@ impl DatabaseInner {
                  rss_link: &str,
                  rss: &feed::RSS)
                  -> Result<()> {
-        let feed_id = get_hash(rss_link);
+        let feed_id = get_hash(&rss_link);
         {
-            let subscribed_feeds =
-                self.subscribers.entry(subscriber).or_insert_with(|| HashSet::new());
+            let subscribed_feeds = self.subscribers.entry(subscriber).or_insert_with(HashSet::new);
             if !subscribed_feeds.insert(feed_id) {
                 return Err(ErrorKind::AlreadySubscribed.into());
             }
@@ -112,45 +111,43 @@ impl DatabaseInner {
     }
 
     fn unsubscribe(&mut self, subscriber: SubscriberID, rss_link: &str) -> Result<Feed> {
-        let feed_id = get_hash(rss_link);
+        let feed_id = get_hash(&rss_link);
 
-        {
-            let mut clear_subscriber = false;
-            self.subscribers
-                .get_mut(&subscriber)
-                .map(|subscribed_feeds| if !subscribed_feeds.remove(&feed_id) {
-                         Err::<(), Error>(ErrorKind::NotSubscribed.into())
-                     } else {
-                         clear_subscriber = subscribed_feeds.len() == 0;
-                         Ok(())
-                     })
-                .unwrap_or(Err(ErrorKind::NotSubscribed.into()))?;
-            if clear_subscriber {
-                self.subscribers.remove(&subscriber);
+        let clear_subscriber;
+        if let Some(subscribed_feeds) = self.subscribers.get_mut(&subscriber) {
+            if subscribed_feeds.remove(&feed_id) {
+                clear_subscriber = subscribed_feeds.is_empty();
+            } else {
+                return Err(ErrorKind::NotSubscribed.into());
             }
+        } else {
+            return Err(ErrorKind::NotSubscribed.into());
         }
+        if clear_subscriber {
+            self.subscribers.remove(&subscriber);
+        }
+
         let result;
-        {
-            let mut clear_feed = false;
-            result = self.feeds
-                .get_mut(&feed_id)
-                .map(|feed| if !feed.subscribers.remove(&subscriber) {
-                         Err::<Feed, Error>(ErrorKind::NotSubscribed.into())
-                     } else {
-                         clear_feed = feed.subscribers.len() == 0;
-                         Ok(feed.clone())
-                     })
-                .unwrap_or(Err(ErrorKind::NotSubscribed.into()))?;
-            if clear_feed {
-                self.feeds.remove(&feed_id);
+        let clear_feed;
+        if let Some(feed) = self.feeds.get_mut(&feed_id) {
+            if feed.subscribers.remove(&subscriber) {
+                clear_feed = feed.subscribers.is_empty();
+                result = feed.clone();
+            } else {
+                return Err(ErrorKind::NotSubscribed.into());
             }
+        } else {
+            return Err(ErrorKind::NotSubscribed.into());
+        };
+        if clear_feed {
+            self.feeds.remove(&feed_id);
         }
         self.save()?;
         Ok(result)
     }
 
-    fn update<'a>(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
-        let feed_id = get_hash(rss_link);
+    fn update(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
+        let feed_id = get_hash(&rss_link);
         if self.feeds.get(&feed_id).is_none() {
             return Vec::new();
         }
@@ -174,7 +171,7 @@ impl DatabaseInner {
                 let mut append: Vec<u64> = feed.hash_list
                     .iter()
                     .take(max_size - new_hash_list.len())
-                    .map(|x| *x)
+                    .cloned()
                     .collect();
                 new_hash_list.append(&mut append);
                 feed.hash_list = new_hash_list;
@@ -185,7 +182,7 @@ impl DatabaseInner {
     }
 
     fn update_title(&mut self, rss_link: &str, new_title: &str) {
-        let feed_id = get_hash(rss_link);
+        let feed_id = get_hash(&rss_link);
         self.feeds
             .get_mut(&feed_id)
             .map(|feed| feed.title = new_title.to_owned())
@@ -228,7 +225,7 @@ fn gen_item_hash(item: &feed::Item) -> u64 {
                 .as_ref()
                 .map(|s| s.as_str())
                 .unwrap_or_default();
-            get_hash(format!("{}{}", title, link))
+            get_hash(&format!("{}{}", title, link))
         })
 }
 
@@ -263,7 +260,7 @@ impl Database {
                 let feed_id = get_hash(&feed.link);
                 for subscriber in &feed.subscribers {
                     let subscribed_feeds = subscribers.entry(subscriber.to_owned())
-                        .or_insert_with(|| HashSet::new());
+                        .or_insert_with(HashSet::new);
                     subscribed_feeds.insert(feed_id);
                 }
                 feeds.insert(feed_id, feed);
@@ -313,7 +310,7 @@ impl Database {
         self.inner.borrow_mut().unsubscribe(subscriber, rss_link)
     }
 
-    pub fn update<'a>(&self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
+    pub fn update(&self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         self.inner.borrow_mut().update(rss_link, items)
     }
 

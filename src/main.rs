@@ -64,7 +64,7 @@ fn main() {
         .expect("failed to initialize bot")
         .update_interval(200);
 
-    cmdhandels::register_commands(bot.clone(), db.clone(), lp.handle());
+    cmdhandels::register_commands(&bot, &db, lp.handle());
 
     fetcher::spawn_fetcher(bot.clone(), db, lp.handle());
 

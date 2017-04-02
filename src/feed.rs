@@ -58,7 +58,7 @@ fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
             Ok(XmlEvent::Start(_)) => {
                 skip_element(reader)?;
             }
-            Ok(XmlEvent::End(_)) => break,
+            Ok(XmlEvent::End(_)) |
             Ok(XmlEvent::Eof) => break,
             Err(err) => return Err(err.into()),
             _ => (),
@@ -80,14 +80,14 @@ impl FromXml for Option<String> {
                     skip_element(reader)?;
                 }
                 Ok(XmlEvent::Text(ref e)) => {
-                    let text = e.unescape_and_decode(&reader)?;
+                    let text = e.unescape_and_decode(reader)?;
                     content = Some(text);
                 }
                 Ok(XmlEvent::CData(ref e)) => {
-                    let text = reader.decode(&e).as_ref().to_owned();
+                    let text = reader.decode(e).as_ref().to_owned();
                     content = Some(text);
                 }
-                Ok(XmlEvent::End(_)) => break,
+                Ok(XmlEvent::End(_)) |
                 Ok(XmlEvent::Eof) => break,
                 Err(err) => return Err(err.into()),
                 _ => (),
@@ -114,13 +114,10 @@ impl FromXml for RSS {
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
-                    match reader.decode(e.name()).as_ref() {
-                        "link" => {
-                            if let Some(link) = parse_atom_link(reader, e.attributes()) {
-                                rss.link = link;
-                            }
+                    if reader.decode(e.name()).as_ref() == "link" {
+                        if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                            rss.link = link;
                         }
-                        _ => (),
                     }
                 }
                 Ok(XmlEvent::Start(ref e)) => {
@@ -140,11 +137,9 @@ impl FromXml for RSS {
                             if let Some(link) = Option::from_xml(reader, e)? {
                                 // RSS
                                 rss.link = link;
-                            } else {
+                            } else if let Some(link) = parse_atom_link(reader, e.attributes()) {
                                 // ATOM
-                                if let Some(link) = parse_atom_link(reader, e.attributes()) {
-                                    rss.link = link;
-                                }
+                                rss.link = link;
                             }
                         }
                         "item" | "entry" => {
@@ -153,7 +148,7 @@ impl FromXml for RSS {
                         _ => skip_element(reader)?,
                     }
                 }
-                Ok(XmlEvent::End(_)) => break,
+                Ok(XmlEvent::End(_)) |
                 Ok(XmlEvent::Eof) => break,
                 Err(err) => return Err(err.into()),
                 _ => (),
@@ -180,13 +175,10 @@ impl FromXml for Item {
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
-                    match reader.decode(e.name()).as_ref() {
-                        "link" => {
-                            if let Some(link) = parse_atom_link(reader, e.attributes()) {
-                                item.link = Some(link);
-                            }
+                    if reader.decode(e.name()).as_ref() == "link" {
+                        if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                            item.link = Some(link);
                         }
-                        _ => (),
                     }
                 }
                 Ok(XmlEvent::Start(ref e)) => {
@@ -198,11 +190,9 @@ impl FromXml for Item {
                             if let Some(link) = Option::from_xml(reader, e)? {
                                 // RSS
                                 item.link = Some(link);
-                            } else {
+                            } else if let Some(link) = parse_atom_link(reader, e.attributes()) {
                                 // ATOM
-                                if let Some(link) = parse_atom_link(reader, e.attributes()) {
-                                    item.link = Some(link);
-                                }
+                                item.link = Some(link);
                             }
                         }
                         "id" | "guid" => {
@@ -211,7 +201,7 @@ impl FromXml for Item {
                         _ => skip_element(reader)?,
                     }
                 }
-                Ok(XmlEvent::End(_)) => break,
+                Ok(XmlEvent::End(_)) |
                 Ok(XmlEvent::Eof) => break,
                 Err(err) => return Err(err.into()),
                 _ => (),
@@ -252,7 +242,7 @@ fn set_url_relative_to_absolute(link: &mut String, host: &str) {
             s.push_str(link);
             *link = s;
         }
-        _ if link.starts_with("/") => {
+        _ if link.starts_with('/') => {
             let mut s = String::from(host);
             s.push_str(link);
             *link = s;
@@ -264,23 +254,19 @@ fn set_url_relative_to_absolute(link: &mut String, host: &str) {
 fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| r.get(0).unwrap().as_str());
     match rss.link.as_str() {
-        "" => rss.link = rss_host.to_owned(),
-        "/" => rss.link = rss_host.to_owned(),
+        "" | "/" => rss.link = rss_host.to_owned(),
         _ => set_url_relative_to_absolute(&mut rss.link, rss_host),
     }
-    for item in rss.items.iter_mut() {
-        match item.link.as_mut() {
-            Some(link) => {
-                set_url_relative_to_absolute(link, rss_host);
-            }
-            _ => (),
+    for item in &mut rss.items {
+        if let Some(link) = item.link.as_mut() {
+            set_url_relative_to_absolute(link, rss_host);
         }
     }
 
     rss
 }
 
-pub fn fetch_feed<'a>(session: Session,
+pub fn fetch_feed<'a>(session: &Session,
                       link: String)
                       -> impl Future<Item = RSS, Error = Error> + 'a {
     let mut req = Easy::new();

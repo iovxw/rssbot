@@ -31,14 +31,14 @@ pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
         let handle2 = handle.clone();
         let bot = bot.clone();
         let db = db.clone();
-        let fetcher = futures::stream::iter(grouped_feeds.into_iter().map(|x| Ok(x)))
+        let fetcher = futures::stream::iter(grouped_feeds.into_iter().map(Ok))
             .for_each(move |group| {
                 let session = Session::new(handle2.clone());
                 let bot = bot.clone();
                 let db = db.clone();
-                let group_fetcher = futures::stream::iter(group.into_iter().map(|x| Ok(x)))
+                let group_fetcher = futures::stream::iter(group.into_iter().map(Ok))
                     .for_each(move |feed| {
-                                  fetch_feed_updates(bot.clone(), db.clone(), session.clone(), feed)
+                                  fetch_feed_updates(bot.clone(), db.clone(), &session, feed)
                               });
                 handle2.spawn(group_fetcher);
                 Timeout::new(Duration::from_secs(1), &handle2)
@@ -54,7 +54,7 @@ fn grouping_by_host(feeds: Vec<data::Feed>) -> Vec<Vec<data::Feed>> {
     let mut result = HashMap::new();
     for feed in feeds {
         let host = get_host(&feed.link).to_owned();
-        let group = result.entry(host).or_insert_with(|| Vec::new());
+        let group = result.entry(host).or_insert_with(Vec::new);
         group.push(feed);
     }
     result.into_iter().map(|(_, v)| v).collect()
@@ -71,7 +71,7 @@ fn shoud_unsubscribe_for_user(tg_err_msg: &str) -> bool {
 
 fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                           db: data::Database,
-                          session: Session,
+                          session: &Session,
                           feed: data::Feed)
                           -> impl Future<Item = (), Error = ()> + 'a {
     let bot_ = bot.clone();
