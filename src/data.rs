@@ -146,6 +146,14 @@ impl DatabaseInner {
         Ok(result)
     }
 
+    fn delete_subscriber(&mut self, subscriber: SubscriberID) {
+        self.get_subscribed_feeds(subscriber)
+            .map(|feeds| for feed in feeds {
+                     let _ = self.unsubscribe(subscriber, &feed.link);
+                 })
+            .unwrap_or_default();
+    }
+
     fn update(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(&rss_link);
         if self.feeds.get(&feed_id).is_none() {
@@ -308,6 +316,10 @@ impl Database {
 
     pub fn unsubscribe(&self, subscriber: SubscriberID, rss_link: &str) -> Result<Feed> {
         self.inner.borrow_mut().unsubscribe(subscriber, rss_link)
+    }
+
+    pub fn delete_subscriber(&self, subscriber: SubscriberID) {
+        self.inner.borrow_mut().delete_subscriber(subscriber);
     }
 
     pub fn update(&self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {

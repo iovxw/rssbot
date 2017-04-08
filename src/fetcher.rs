@@ -11,7 +11,7 @@ use regex::Regex;
 use data;
 use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs, to_chinese_error_msg,
-            truncate_message, log_error, TELEGRAM_MAX_MSG_LEN};
+            truncate_message, TELEGRAM_MAX_MSG_LEN};
 
 // 5 minute
 const FREQUENCY_SECOND: u64 = 300;
@@ -102,32 +102,17 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                             .parse_mode("HTML")
                             .disable_web_page_preview(true)
                             .send();
-                        let feed_link = feed.link.clone();
                         let db = db.clone();
-                        let bot = bot.clone();
-                        let r = m.or_else(move |e| {
+                        let r = m.map_err(move |e| {
                             match e {
-                                    telebot::error::Error::Telegram(ref s)
+                                telebot::error::Error::Telegram(ref s)
                                         if shoud_unsubscribe_for_user(s) => {
-                                            Err((bot, db, s.to_owned(), subscriber, feed_link))
+                                            db.delete_subscriber(subscriber);
                                         }
-                                    _ => {
-                                        warn!("failed to send error to {}, {:?}", subscriber, e);
-                                        Ok(())
-                                    }
+                                _ => {
+                                    warn!("failed to send error to {}, {:?}", subscriber, e);
                                 }
-                                .into_future()
-                                .or_else(|(bot, db, s, subscriber, feed_link)| {
-                                    if let Err(e) = db.unsubscribe(subscriber, &feed_link) {
-                                        log_error(&e);
-                                    }
-                                    bot.message(subscriber,
-                                                 format!("无法修复的错误 ({}), 自动退订",
-                                                         s))
-                                        .send()
-                                        .then(|_| Err(()))
-                                })
-                                .and_then(|_| Err(()))
+                            };
                         });
                         // if not use Box, rustc will panic
                         msgs.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
@@ -165,31 +150,19 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
 
             let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
             for &subscriber in &feed.subscribers {
-                let feed_link = feed.link.clone();
                 let db = db.clone();
                 let bot = bot.clone();
                 let r = send_multiple_messages(&bot, subscriber, msgs.clone())
-                    .or_else(move |e| {
+                    .map_err(move |e| {
                         match e {
-                                telebot::error::Error::Telegram(ref s)
+                            telebot::error::Error::Telegram(ref s)
                                 if shoud_unsubscribe_for_user(s) => {
-                                Err((bot, db, s.to_owned(), subscriber, feed_link))
+                                db.delete_subscriber(subscriber);
                             }
-                                _ => {
-                                    warn!("failed to send updates to {}, {:?}", subscriber, e);
-                                    Ok(())
-                                }
+                            _ => {
+                                warn!("failed to send updates to {}, {:?}", subscriber, e);
                             }
-                            .into_future()
-                            .or_else(|(bot, db, s, subscriber, feed_link)| {
-                                if let Err(e) = db.unsubscribe(subscriber, &feed_link) {
-                                    log_error(&e);
-                                }
-                                bot.message(subscriber,
-                                             format!("无法修复的错误 ({}), 自动退订", s))
-                                    .send()
-                                    .then(|_| Err(()))
-                            })
+                        };
                     });
                 msg_futures.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
             }
