@@ -454,7 +454,7 @@ pub struct GetChatMember {
 #[call = "answerCallbackQuery"]
 #[answer = "Boolean"]
 #[function = "answer_callback_query"]
-pub struct AnwerCallbackQuery {
+pub struct AnswerCallbackQuery {
     callback_query_id: String,
     text: Option<String>,
     show_alert: Option<bool>,
