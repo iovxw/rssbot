@@ -441,7 +441,7 @@ pub struct GetChatMemberCounts {
 #[derive(TelegramFunction,  Serialize)]
 #[call = "getChatMember"]
 #[answer = "ChatMember"]
-#[function = "get_chat_members_count"]
+#[function = "get_chat_member"]
 pub struct GetChatMember {
     chat_id: ChatID,
     user_id: Integer,

@@ -126,6 +126,11 @@ pub fn to_chinese_error_msg(e: errors::Error) -> String {
     }
 }
 
+pub fn chat_is_unavailable(tg_err_msg: &str) -> bool {
+    tg_err_msg.contains("Forbidden") || tg_err_msg.contains("chat not found") ||
+        tg_err_msg.contains("group chat was migrated to a supergroup chat")
+}
+
 pub fn log_error(e: &errors::Error) {
     warn!("error: {}", e);
     for e in e.iter().skip(1) {

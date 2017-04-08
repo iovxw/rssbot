@@ -11,7 +11,7 @@ use regex::Regex;
 use data;
 use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs, to_chinese_error_msg,
-            truncate_message, TELEGRAM_MAX_MSG_LEN};
+            truncate_message, chat_is_unavailable, TELEGRAM_MAX_MSG_LEN};
 
 // 5 minute
 const FREQUENCY_SECOND: u64 = 300;
@@ -64,11 +64,6 @@ fn get_host(url: &str) -> &str {
     HOST.captures(url).map_or(url, |r| r.get(0).unwrap().as_str())
 }
 
-fn shoud_unsubscribe_for_user(tg_err_msg: &str) -> bool {
-    tg_err_msg.contains("Forbidden") || tg_err_msg.contains("chat not found") ||
-    tg_err_msg.contains("group chat was migrated to a supergroup chat")
-}
-
 fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                           db: data::Database,
                           session: &Session,
@@ -106,9 +101,9 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                         let r = m.map_err(move |e| {
                             match e {
                                 telebot::error::Error::Telegram(ref s)
-                                        if shoud_unsubscribe_for_user(s) => {
-                                            db.delete_subscriber(subscriber);
-                                        }
+                                    if chat_is_unavailable(s) => {
+                                    db.delete_subscriber(subscriber);
+                                }
                                 _ => {
                                     warn!("failed to send error to {}, {:?}", subscriber, e);
                                 }
@@ -155,8 +150,7 @@ fn fetch_feed_updates<'a>(bot: telebot::RcBot,
                 let r = send_multiple_messages(&bot, subscriber, msgs.clone())
                     .map_err(move |e| {
                         match e {
-                            telebot::error::Error::Telegram(ref s)
-                                if shoud_unsubscribe_for_user(s) => {
+                            telebot::error::Error::Telegram(ref s) if chat_is_unavailable(s) => {
                                 db.delete_subscriber(subscriber);
                             }
                             _ => {

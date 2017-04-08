@@ -45,6 +45,13 @@ impl DatabaseInner {
             .collect()
     }
 
+    fn get_all_subscribers(&self) -> Vec<SubscriberID> {
+        self.subscribers
+            .iter()
+            .map(|(k, _)| *k)
+            .collect()
+    }
+
     fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<Feed>> {
         self.subscribers.get(&subscriber).map(|feeds| {
                                                   feeds.iter()
@@ -288,6 +295,10 @@ impl Database {
 
     pub fn get_all_feeds(&self) -> Vec<Feed> {
         self.inner.borrow().get_all_feeds()
+    }
+
+    pub fn get_all_subscribers(&self) -> Vec<SubscriberID> {
+        self.inner.borrow().get_all_subscribers()
     }
 
     pub fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<Feed>> {

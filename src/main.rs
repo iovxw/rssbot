@@ -30,6 +30,7 @@ mod data;
 mod utlis;
 mod cmdhandels;
 mod fetcher;
+mod checker;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -66,7 +67,9 @@ fn main() {
 
     cmdhandels::register_commands(&bot, &db, lp.handle());
 
-    fetcher::spawn_fetcher(bot.clone(), db, lp.handle());
+    fetcher::spawn_fetcher(bot.clone(), db.clone(), lp.handle());
+
+    checker::spawn_subscriber_alive_checker(bot.clone(), db, lp.handle());
 
     loop {
         if let Err(err) = lp.run(bot.get_stream().for_each(|_| Ok(()))) {
