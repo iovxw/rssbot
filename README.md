@@ -7,7 +7,7 @@
     /rss       - 显示当前订阅的 RSS 列表，加 raw 参数显示链接
     /sub       - 订阅一个 RSS: /sub http://example.com/feed.xml
     /unsub     - 退订一个 RSS: /unsub http://example.com/feed.xml
-    /unsubthis - 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel"
+    /unsubthis - 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel
 
 ## 编译
 
@@ -25,7 +25,7 @@ cargo build --release
 ./rssbot DATAFILE TELEGRAM-BOT-TOKEN
 ```
 
-`DATAFILE` 为数据库保存路径(其实就是一个 json 文件), `TELEGRAM-BOT-TOKEN` 请参照 [这里](https://core.telegram.org/bots#3-how-do-i-create-a-bot) 申请
+`DATAFILE` 为数据库保存路径(其实就是一个 json 文件, 不需要手动创建), `TELEGRAM-BOT-TOKEN` 请参照 [这里](https://core.telegram.org/bots#3-how-do-i-create-a-bot) 申请
 
 ## 从旧的 RSSBot 迁移
 
