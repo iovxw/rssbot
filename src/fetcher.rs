@@ -39,6 +39,7 @@ pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
                 let group_fetcher = futures::stream::iter(group.into_iter().map(Ok))
                     .for_each(move |feed| {
                                   fetch_feed_updates(bot.clone(), db.clone(), &session, feed)
+                                      .then(|_| Ok(()))
                               });
                 handle2.spawn(group_fetcher);
                 Timeout::new(Duration::from_secs(1), &handle2)
