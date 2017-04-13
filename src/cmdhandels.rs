@@ -1,6 +1,6 @@
 use telebot::functions::*;
 use tokio_core::reactor::Handle;
-use futures::{self, Future, Stream, IntoFuture};
+use futures::{future, Future, Stream, IntoFuture};
 use tokio_curl::Session;
 use telebot;
 use pinyin_order;
@@ -21,54 +21,55 @@ pub fn register_commands(bot: &telebot::RcBot, db: &Database, lphandle: Handle) 
 fn register_rss(bot: &telebot::RcBot, db: Database) {
     let handle = bot.new_cmd("/rss")
         .map_err(Some)
-        .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
+        .and_then(move |(bot, msg)| {
             let text = msg.text.unwrap();
             let args: Vec<&str> = text.split_whitespace().collect();
             let raw: bool;
-            let subscriber: Box<Future<Item = Option<i64>, Error = telebot::Error>>;
+            let subscriber: future::Either<_, _>;
             match args.len() {
                 0 => {
                     raw = false;
-                    subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
+                    subscriber = future::Either::A(future::ok(Some(msg.chat.id)));
                 }
                 1 => {
                     if args[0] == "raw" {
                         raw = true;
-                        subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
+                        subscriber = future::Either::A(future::ok(Some(msg.chat.id)));
                     } else {
                         raw = false;
                         let channel = args[0];
-                        subscriber = Box::new(check_channel(&bot,
-                                                            channel,
-                                                            msg.chat.id,
-                                                            msg.from.unwrap().id));
+                        let channel_id =
+                            check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id);
+                        subscriber = future::Either::B(channel_id);
                     }
                 }
                 2 => {
                     raw = true;
                     let channel = args[0];
-                    subscriber =
-                        Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                    let channel_id =
+                        check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id);
+                    subscriber = future::Either::B(channel_id);
                 }
                 _ => {
-                    return Box::new(bot.message(msg.chat.id,
-                                                "使用方法: /rss <Channel ID> <raw>"
-                                                    .to_string())
-                                        .send()
-                                        .then(|result| match result {
-                                                  Ok(_) => Err(None),
-                                                  Err(e) => Err(Some(e)),
-                                              }))
+                    let r = bot.message(msg.chat.id,
+                                        "使用方法: /rss <Channel ID> <raw>".to_string())
+                        .send()
+                        .then(|result| match result {
+                                  Ok(_) => Err(None),
+                                  Err(e) => Err(Some(e)),
+                              });
+                    return future::Either::A(r);
                 }
             }
             let db = db.clone();
             let chat_id = msg.chat.id;
-            Box::new(subscriber.then(|result| match result {
-                                         Ok(Some(ok)) => Ok(ok),
-                                         Ok(None) => Err(None),
-                                         Err(err) => Err(Some(err)),
-                                     })
-                         .map(move |subscriber| (bot, db, subscriber, raw, chat_id)))
+            let r = subscriber.then(|result| match result {
+                                        Ok(Some(ok)) => Ok(ok),
+                                        Ok(None) => Err(None),
+                                        Err(err) => Err(Some(err)),
+                                    })
+                .map(move |subscriber| (bot, db, subscriber, raw, chat_id));
+            future::Either::B(r)
         })
         .and_then(|(bot, db, subscriber, raw, chat_id)| {
             match db.get_subscribed_feeds(subscriber) {
@@ -118,45 +119,45 @@ fn register_rss(bot: &telebot::RcBot, db: Database) {
 fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
     let handle = bot.new_cmd("/sub")
         .map_err(Some)
-        .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
+        .and_then(move |(bot, msg)| {
             let text = msg.text.unwrap();
             let args: Vec<&str> = text.split_whitespace().collect();
             let feed_link: &str;
-            let subscriber: Box<Future<Item = Option<i64>, Error = telebot::Error>>;
+            let subscriber: future::Either<_, _>;
             match args.len() {
                 1 => {
                     feed_link = args[0];
-                    subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
+                    subscriber = future::Either::A(future::ok(Some(msg.chat.id)));
                 }
                 2 => {
                     let channel = args[0];
-                    subscriber =
-                        Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                    let channel_id =
+                        check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id);
+                    subscriber = future::Either::B(channel_id);
                     feed_link = args[1];
                 }
                 _ => {
-                    return Box::new(bot.message(msg.chat.id,
-                                                "使用方法: /sub [Channel ID] <RSS URL>"
-                                                    .to_string())
-                                        .send()
-                                        .then(|result| match result {
-                                                  Ok(_) => Err(None),
-                                                  Err(e) => Err(Some(e)),
-                                              }))
+                    let r = bot.message(msg.chat.id,
+                                        "使用方法: /sub [Channel ID] <RSS URL>".to_string())
+                        .send()
+                        .then(|result| match result {
+                                  Ok(_) => Err(None),
+                                  Err(e) => Err(Some(e)),
+                              });
+                    return future::Either::A(r);
                 }
             }
             let db = db.clone();
             let feed_link = feed_link.to_owned();
             let chat_id = msg.chat.id;
             let lphandle = lphandle.clone();
-            Box::new(subscriber.then(|result| match result {
-                                         Ok(Some(ok)) => Ok(ok),
-                                         Ok(None) => Err(None),
-                                         Err(err) => Err(Some(err)),
-                                     })
-                         .map(move |subscriber| {
-                                  (bot, db, subscriber, feed_link, chat_id, lphandle)
-                              }))
+            let r = subscriber.then(|result| match result {
+                                        Ok(Some(ok)) => Ok(ok),
+                                        Ok(None) => Err(None),
+                                        Err(err) => Err(Some(err)),
+                                    })
+                .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id, lphandle));
+            future::Either::B(r)
         })
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
             if db.is_subscribed(subscriber, &feed_link) {
@@ -221,42 +222,44 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
 fn register_unsub(bot: &telebot::RcBot, db: Database) {
     let handle = bot.new_cmd("/unsub")
         .map_err(Some)
-        .and_then(move |(bot, msg)| -> Box<Future<Item = _, Error = Option<_>>> {
+        .and_then(move |(bot, msg)| {
             let text = msg.text.unwrap();
             let args: Vec<&str> = text.split_whitespace().collect();
             let feed_link: &str;
-            let subscriber: Box<Future<Item = Option<i64>, Error = telebot::Error>>;
+            let subscriber: future::Either<_, _>;
             match args.len() {
                 1 => {
                     feed_link = args[0];
-                    subscriber = futures::future::ok(Some(msg.chat.id)).boxed();
+                    subscriber = future::Either::A(future::ok(Some(msg.chat.id)));
                 }
                 2 => {
                     let channel = args[0];
-                    subscriber =
-                        Box::new(check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id));
+                    let channel_id =
+                        check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id);
+                    subscriber = future::Either::B(channel_id);
                     feed_link = args[1];
                 }
                 _ => {
-                    return Box::new(bot.message(msg.chat.id,
-                                                "使用方法: /unsub [Channel ID] <RSS URL>"
-                                                    .to_string())
-                                        .send()
-                                        .then(|result| match result {
-                                                  Ok(_) => Err(None),
-                                                  Err(e) => Err(Some(e)),
-                                              }))
+                    let r = bot.message(msg.chat.id,
+                                        "使用方法: /unsub [Channel ID] <RSS URL>".to_string())
+                        .send()
+                        .then(|result| match result {
+                                  Ok(_) => Err(None),
+                                  Err(e) => Err(Some(e)),
+                              });
+                    return future::Either::A(r);
                 }
             }
             let db = db.clone();
             let feed_link = feed_link.to_owned();
             let chat_id = msg.chat.id;
-            Box::new(subscriber.then(|result| match result {
-                                         Ok(Some(ok)) => Ok(ok),
-                                         Ok(None) => Err(None),
-                                         Err(err) => Err(Some(err)),
-                                     })
-                         .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id)))
+            let r = subscriber.then(|result| match result {
+                                        Ok(Some(ok)) => Ok(ok),
+                                        Ok(None) => Err(None),
+                                        Err(err) => Err(Some(err)),
+                                    })
+                .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id));
+            future::Either::B(r)
         })
         .and_then(|(bot, db, subscriber, feed_link, chat_id)| {
             match db.unsubscribe(subscriber, &feed_link) {
