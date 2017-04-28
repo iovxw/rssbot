@@ -8,7 +8,7 @@
 pub type Boolean = bool;
 pub type Integer = i64;
 pub type Vector<T> = Vec<T>;
-pub type NotImplemented = ();
+pub type NotImplemented = ::serde_json::Value;
 
 /// This object represents a Telegram user or bot.
 #[derive(Serialize, Deserialize, Debug, Clone)]
