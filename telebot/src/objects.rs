@@ -66,6 +66,7 @@ pub struct Message {
     pub sticker: Option<Sticker>,
     pub video: Option<Video>,
     pub voice: Option<Voice>,
+    pub new_chat_members: Option<Vec<User>>,
     pub caption: Option<String>,
     pub contact: Option<Contact>,
     pub location: Option<Location>,
