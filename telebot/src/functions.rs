@@ -275,6 +275,26 @@ pub struct SendVoice {
     reply_markup: Option<NotImplemented>,
 }
 
+#[derive(TelegramFunction,  Serialize)]
+#[call = "sendVideoNote"]
+#[answer = "Message"]
+#[function = "video_note"]
+#[file_kind = "video_note"]
+pub struct SendVideoNote {
+    chat_id: ChatID,
+    video_note: Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    duration: Option<Integer>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    length: Option<Integer>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    disable_notification: Option<bool>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    reply_to_message_id: Option<Integer>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    reply_markup: Option<NotImplemented>,
+}
+
 /// Use this method to send point on the map. On success, the sent Message is returned.
 #[derive(TelegramFunction,  Serialize)]
 #[call = "sendLocation"]
