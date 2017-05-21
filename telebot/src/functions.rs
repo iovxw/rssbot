@@ -6,7 +6,7 @@ use bot::{Bot, RcBot};
 use serde_json;
 use serde;
 use objects;
-use objects::{Integer, NotImplemented};
+use objects::{Integer, Boolean, NotImplemented};
 use error::Error;
 use file;
 use futures::Future;
@@ -128,9 +128,9 @@ pub struct Message {
     #[serde(skip_serializing_if="Option::is_none")]
     parse_mode: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_web_page_preview: Option<bool>,
+    disable_web_page_preview: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notificaton: Option<bool>,
+    disable_notificaton: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -149,9 +149,9 @@ pub struct SendPhoto {
     #[serde(skip_serializing_if="Option::is_none")]
     caption: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
-    reply_to_message_id: Option<bool>,
+    reply_to_message_id: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_markup: Option<NotImplemented>,
 }
@@ -178,7 +178,7 @@ pub struct SendAudio {
     #[serde(skip_serializing_if="Option::is_none")]
     title: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -199,7 +199,7 @@ pub struct SendDocument {
     #[serde(skip_serializing_if="Option::is_none")]
     caption: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -216,7 +216,7 @@ pub struct SendSticker {
     chat_id: ChatID,
     sticker: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -243,7 +243,7 @@ pub struct SendVideo {
     #[serde(skip_serializing_if="Option::is_none")]
     caption: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -268,7 +268,7 @@ pub struct SendVoice {
     #[serde(skip_serializing_if="Option::is_none")]
     duration: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -288,7 +288,7 @@ pub struct SendVideoNote {
     #[serde(skip_serializing_if="Option::is_none")]
     length: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -305,7 +305,7 @@ pub struct SendLocation {
     latitude: f32,
     longitude: f32,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -325,7 +325,7 @@ pub struct SendVenue {
     address: String,
     foursquare_id: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -343,7 +343,7 @@ pub struct SendContact {
     first_name: String,
     last_name: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_notification: Option<bool>,
+    disable_notification: Option<Boolean>,
     #[serde(skip_serializing_if="Option::is_none")]
     reply_to_message_id: Option<Integer>,
     #[serde(skip_serializing_if="Option::is_none")]
@@ -477,7 +477,7 @@ pub struct GetChatMember {
 pub struct AnswerCallbackQuery {
     callback_query_id: String,
     text: Option<String>,
-    show_alert: Option<bool>,
+    show_alert: Option<Boolean>,
     url: Option<String>,
     cache_time: Option<Integer>,
 }
@@ -493,23 +493,43 @@ pub struct AnswerInlineQuery {
     inline_query_id: String,
     results: Vec<Box<Serialize>>,
     cache_time: Option<Integer>,
-    is_personal: Option<bool>,
+    is_personal: Option<Boolean>,
     next_offset: Option<String>,
     switch_pm_text: Option<String>,
     switch_pm_parameter: Option<String>,
 }
 */
 
+/// Use this method to edit text and game messages sent by the bot or via the bot (for inline bots).
+/// On success, if edited message is sent by the bot, the edited Message is returned,
+/// otherwise True is returned.
 #[derive(TelegramFunction,  Serialize)]
 #[call = "editMessageText"]
 #[answer = "Message"]
 #[function = "edit_message_text"]
 pub struct EditMessageText {
-    chat_id: i64,
-    message_id: i64,
+    chat_id: ChatID,
+    message_id: Integer,
     text: String,
     #[serde(skip_serializing_if="Option::is_none")]
     parse_mode: Option<String>,
     #[serde(skip_serializing_if="Option::is_none")]
-    disable_web_page_preview: Option<bool>,
+    disable_web_page_preview: Option<Boolean>,
+}
+
+/// Use this method to delete a message.
+/// A message can only be deleted if it was sent less than 48 hours ago.
+/// Any such recently sent outgoing message may be deleted.
+/// Additionally, if the bot is an administrator in a group chat, it can delete any message.
+/// If the bot is an administrator in a supergroup,
+/// it can delete messages from any other user and service messages about people joining or
+/// leaving the group (other types of service messages may only be removed by the group creator).
+/// In channels, bots can only remove their own messages. Returns True on success.
+#[derive(TelegramFunction,  Serialize)]
+#[call = "deleteMessage"]
+#[answer = "Boolean"]
+#[function = "delete_message"]
+pub struct DeleteMessage {
+    chat_id: ChatID,
+    message_id: Integer,
 }
