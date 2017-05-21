@@ -66,6 +66,7 @@ pub struct Message {
     pub sticker: Option<Sticker>,
     pub video: Option<Video>,
     pub voice: Option<Voice>,
+    pub video_note: Option<VideoNote>,
     pub new_chat_members: Option<Vec<User>>,
     pub caption: Option<String>,
     pub contact: Option<Contact>,
@@ -158,6 +159,16 @@ pub struct Voice {
     pub file_id: String,
     pub duration: Integer,
     pub mime_type: Option<String>,
+    pub file_size: Option<Integer>,
+}
+
+/// This object represents a video message (available in Telegram apps as of v.4.0).
+#[derive(Deserialize, Debug)]
+pub struct VideoNote {
+    pub file_id: String,
+    pub length: Integer,
+    pub duration: Integer,
+    pub thumb: Option<PhotoSize>,
     pub file_size: Option<Integer>,
 }
 
