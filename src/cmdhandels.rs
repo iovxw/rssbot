@@ -7,8 +7,8 @@ use pinyin_order;
 
 use errors;
 use feed;
-use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs, to_chinese_error_msg,
-            log_error};
+use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
+            to_chinese_error_msg, log_error};
 use data::Database;
 
 pub fn register_commands(bot: &telebot::RcBot, db: &Database, lphandle: Handle) {
@@ -63,11 +63,12 @@ fn register_rss(bot: &telebot::RcBot, db: Database) {
             }
             let db = db.clone();
             let chat_id = msg.chat.id;
-            let r = subscriber.then(|result| match result {
-                                        Ok(Some(ok)) => Ok(ok),
-                                        Ok(None) => Err(None),
-                                        Err(err) => Err(Some(err)),
-                                    })
+            let r = subscriber
+                .then(|result| match result {
+                          Ok(Some(ok)) => Ok(ok),
+                          Ok(None) => Err(None),
+                          Err(err) => Err(Some(err)),
+                      })
                 .map(move |subscriber| (bot, db, subscriber, raw, chat_id));
             future::Either::B(r)
         })
@@ -78,13 +79,13 @@ fn register_rss(bot: &telebot::RcBot, db: Database) {
                 }
                 .into_future()
                 .or_else(|(bot, chat_id)| {
-                    bot.message(chat_id, "订阅列表为空".to_string())
-                                .send()
-                                .then(|r| match r {
-                                          Ok(_) => Err(None),
-                                          Err(e) => Err(Some(e)),
-                                      })
-                })
+                             bot.message(chat_id, "订阅列表为空".to_string())
+                                 .send()
+                                 .then(|r| match r {
+                                           Ok(_) => Err(None),
+                                           Err(e) => Err(Some(e)),
+                                       })
+                         })
         })
         .and_then(|(bot, raw, chat_id, mut feeds)| {
             let text = String::from("订阅列表:");
@@ -107,9 +108,9 @@ fn register_rss(bot: &telebot::RcBot, db: Database) {
         })
         .then(|result| match result {
                   Err(Some(err)) => {
-            error!("telebot: {:?}", err);
-            Ok::<(), ()>(())
-        }
+                      error!("telebot: {:?}", err);
+                      Ok::<(), ()>(())
+                  }
                   _ => Ok(()),
               });
 
@@ -151,11 +152,12 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
             let feed_link = feed_link.to_owned();
             let chat_id = msg.chat.id;
             let lphandle = lphandle.clone();
-            let r = subscriber.then(|result| match result {
-                                        Ok(Some(ok)) => Ok(ok),
-                                        Ok(None) => Err(None),
-                                        Err(err) => Err(Some(err)),
-                                    })
+            let r = subscriber
+                .then(|result| match result {
+                          Ok(Some(ok)) => Ok(ok),
+                          Ok(None) => Err(None),
+                          Err(err) => Err(Some(err)),
+                      })
                 .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id, lphandle));
             future::Either::B(r)
         })
@@ -167,13 +169,13 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                 }
                 .into_future()
                 .or_else(|(bot, chat_id)| {
-                    bot.message(chat_id, "已订阅过的 RSS".to_string())
-                            .send()
-                            .then(|result| match result {
-                                      Ok(_) => Err(None),
-                                      Err(e) => Err(Some(e)),
-                                  })
-                })
+                             bot.message(chat_id, "已订阅过的 RSS".to_string())
+                                 .send()
+                                 .then(|result| match result {
+                                           Ok(_) => Err(None),
+                                           Err(e) => Err(Some(e)),
+                                       })
+                         })
         })
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
             let session = Session::new(lphandle);
@@ -210,9 +212,9 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
         })
         .then(|result| match result {
                   Err(Some(err)) => {
-            error!("telebot: {:?}", err);
-            Ok::<(), ()>(())
-        }
+                      error!("telebot: {:?}", err);
+                      Ok::<(), ()>(())
+                  }
                   _ => Ok(()),
               });
 
@@ -253,11 +255,12 @@ fn register_unsub(bot: &telebot::RcBot, db: Database) {
             let db = db.clone();
             let feed_link = feed_link.to_owned();
             let chat_id = msg.chat.id;
-            let r = subscriber.then(|result| match result {
-                                        Ok(Some(ok)) => Ok(ok),
-                                        Ok(None) => Err(None),
-                                        Err(err) => Err(Some(err)),
-                                    })
+            let r = subscriber
+                .then(|result| match result {
+                          Ok(Some(ok)) => Ok(ok),
+                          Ok(None) => Err(None),
+                          Err(err) => Err(Some(err)),
+                      })
                 .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id));
             future::Either::B(r)
         })
@@ -273,7 +276,8 @@ fn register_unsub(bot: &telebot::RcBot, db: Database) {
                             .send()
                     }
                     Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
-                        bot.message(chat_id, "未订阅过的 RSS".to_string()).send()
+                        bot.message(chat_id, "未订阅过的 RSS".to_string())
+                            .send()
                     }
                     Err(e) => {
                         log_error(&e);
@@ -284,9 +288,9 @@ fn register_unsub(bot: &telebot::RcBot, db: Database) {
         })
         .then(|result| match result {
                   Err(Some(err)) => {
-            error!("telebot: {:?}", err);
-            Ok::<(), ()>(())
-        }
+                      error!("telebot: {:?}", err);
+                      Ok::<(), ()>(())
+                  }
                   _ => Ok(()),
               });
 
@@ -329,13 +333,13 @@ fn register_unsubthis(bot: &telebot::RcBot, db: Database) {
                 }
                 .into_future()
                 .or_else(|(bot, chat_id)| {
-                    bot.message(chat_id, "无法识别的消息".to_string())
-                        .send()
-                        .then(|result| match result {
-                                  Ok(_) => Err(None),
-                                  Err(e) => Err(Some(e)),
-                              })
-                })
+                             bot.message(chat_id, "无法识别的消息".to_string())
+                                 .send()
+                                 .then(|result| match result {
+                                           Ok(_) => Err(None),
+                                           Err(e) => Err(Some(e)),
+                                       })
+                         })
         })
         .and_then(|(bot, db, chat_id, title)| {
             if let Some(feed_link) = db.get_subscribed_feeds(chat_id)
@@ -350,13 +354,13 @@ fn register_unsubthis(bot: &telebot::RcBot, db: Database) {
                 }
                 .into_future()
                 .or_else(|(bot, chat_id)| {
-                    bot.message(chat_id, "无法找到此订阅".to_string())
-                        .send()
-                        .then(|result| match result {
-                                  Ok(_) => Err(None),
-                                  Err(e) => Err(Some(e)),
-                              })
-                })
+                             bot.message(chat_id, "无法找到此订阅".to_string())
+                                 .send()
+                                 .then(|result| match result {
+                                           Ok(_) => Err(None),
+                                           Err(e) => Err(Some(e)),
+                                       })
+                         })
         })
         .and_then(|(bot, db, chat_id, feed_link)| {
             match db.unsubscribe(chat_id, &feed_link) {
@@ -378,9 +382,9 @@ fn register_unsubthis(bot: &telebot::RcBot, db: Database) {
         })
         .then(|result| match result {
                   Err(Some(err)) => {
-            error!("telebot: {:?}", err);
-            Ok::<(), ()>(())
-        }
+                      error!("telebot: {:?}", err);
+                      Ok::<(), ()>(())
+                  }
                   _ => Ok(()),
               });
 
@@ -392,7 +396,8 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                      chat_id: i64,
                      user_id: i64)
                      -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
-    let channel = channel.parse::<i64>()
+    let channel = channel
+        .parse::<i64>()
         .map(|_| if !channel.starts_with("-100") {
                  format!("-100{}", channel)
              } else {
@@ -473,8 +478,10 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                         .and_then(|e| Err(Some(e)))
                 })
                 .map(move |(bot, admins)| {
-                         let admin_id_list =
-                        admins.iter().map(|member| member.user.id).collect::<Vec<i64>>();
+                         let admin_id_list = admins
+                             .iter()
+                             .map(|member| member.user.id)
+                             .collect::<Vec<i64>>();
                          (bot, chat_id, user_id, admin_id_list, msg_id, channel_id)
                      })
         })
@@ -498,7 +505,7 @@ fn check_channel<'a>(bot: &telebot::RcBot,
         })
         .and_then(|(bot, chat_id, user_id, admin_id_list, msg_id, channel_id)| {
             if admin_id_list.contains(&user_id) {
-                    Ok(channel_id)
+                    Ok((bot, chat_id, msg_id, channel_id))
                 } else {
                     Err((bot, chat_id, msg_id))
                 }
@@ -514,6 +521,12 @@ fn check_channel<'a>(bot: &telebot::RcBot,
                               })
                 })
         })
+        .and_then(|(bot, chat_id, msg_id, channel_id)| {
+                      bot.delete_message(chat_id, msg_id)
+                          .send()
+                          .map_err(Some)
+                          .map(move |_| channel_id)
+                  })
         .then(|result| match result {
                   Err(None) => Ok(None),
                   Err(Some(e)) => Err(e),
