@@ -71,10 +71,11 @@ impl<'a> ::std::fmt::Display for EscapeUrl<'a> {
     }
 }
 
-pub fn send_multiple_messages<'a>(bot: &telebot::RcBot,
-                                  target: i64,
-                                  messages: Vec<String>)
-                                  -> impl Future<Item = (), Error = telebot::Error> + 'a {
+pub fn send_multiple_messages<'a>(
+    bot: &telebot::RcBot,
+    target: i64,
+    messages: Vec<String>,
+) -> impl Future<Item = (), Error = telebot::Error> + 'a {
     let bot = bot.clone();
     let l = futures::stream::iter(messages.into_iter().map(Ok));
     l.for_each(move |msg| {
@@ -95,7 +96,8 @@ pub fn truncate_message(s: &str, max: usize) -> String {
 }
 
 pub fn format_and_split_msgs<T, F>(head: String, data: &[T], line_format_fn: F) -> Vec<String>
-    where F: Fn(&T) -> String
+where
+    F: Fn(&T) -> String,
 {
     let mut msgs = vec![head];
     for item in data {

@@ -39,26 +39,21 @@ struct DatabaseInner {
 
 impl DatabaseInner {
     fn get_all_feeds(&self) -> Vec<Feed> {
-        self.feeds
-            .iter()
-            .map(|(_, v)| v.clone())
-            .collect()
+        self.feeds.iter().map(|(_, v)| v.clone()).collect()
     }
 
     fn get_all_subscribers(&self) -> Vec<SubscriberID> {
-        self.subscribers
-            .iter()
-            .map(|(k, _)| *k)
-            .collect()
+        self.subscribers.iter().map(|(k, _)| *k).collect()
     }
 
     fn get_subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<Feed>> {
         self.subscribers.get(&subscriber).map(|feeds| {
-                                                  feeds.iter()
-                                                      .map(|feed_id| &self.feeds[feed_id])
-                                                      .cloned()
-                                                      .collect()
-                                              })
+            feeds
+                .iter()
+                .map(|feed_id| &self.feeds[feed_id])
+                .cloned()
+                .collect()
+        })
     }
 
     fn inc_error_count(&mut self, rss_link: &str) -> u32 {
@@ -66,9 +61,9 @@ impl DatabaseInner {
         self.feeds
             .get_mut(&feed_id)
             .map(|feed| {
-                     feed.error_count += 1;
-                     feed.error_count
-                 })
+                feed.error_count += 1;
+                feed.error_count
+            })
             .unwrap_or_default()
     }
 
@@ -87,14 +82,17 @@ impl DatabaseInner {
             .unwrap_or(false)
     }
 
-    fn subscribe(&mut self,
-                 subscriber: SubscriberID,
-                 rss_link: &str,
-                 rss: &feed::RSS)
-                 -> Result<()> {
+    fn subscribe(
+        &mut self,
+        subscriber: SubscriberID,
+        rss_link: &str,
+        rss: &feed::RSS,
+    ) -> Result<()> {
         let feed_id = get_hash(&rss_link);
         {
-            let subscribed_feeds = self.subscribers.entry(subscriber).or_insert_with(HashSet::new);
+            let subscribed_feeds = self.subscribers.entry(subscriber).or_insert_with(
+                HashSet::new,
+            );
             if !subscribed_feeds.insert(feed_id) {
                 return Err(ErrorKind::AlreadySubscribed.into());
             }
@@ -105,10 +103,7 @@ impl DatabaseInner {
                     link: rss_link.to_owned(),
                     title: rss.title.to_owned(),
                     error_count: 0,
-                    hash_list: rss.items
-                        .iter()
-                        .map(gen_item_hash)
-                        .collect(),
+                    hash_list: rss.items.iter().map(gen_item_hash).collect(),
                     subscribers: HashSet::new(),
                 }
             });
@@ -156,8 +151,8 @@ impl DatabaseInner {
     fn delete_subscriber(&mut self, subscriber: SubscriberID) {
         self.get_subscribed_feeds(subscriber)
             .map(|feeds| for feed in feeds {
-                     let _ = self.unsubscribe(subscriber, &feed.link);
-                 })
+                let _ = self.unsubscribe(subscriber, &feed.link);
+            })
             .unwrap_or_default();
     }
 
@@ -205,14 +200,15 @@ impl DatabaseInner {
     }
 
     fn save(&self) -> Result<()> {
-        let feeds_list: Vec<&Feed> = self.feeds
-            .iter()
-            .map(|(_id, feed)| feed)
-            .collect();
-        let mut file =
-            File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;
-        serde_json::to_writer(&mut file, &feeds_list)
-            .chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
+        let feeds_list: Vec<&Feed> = self.feeds.iter().map(|(_id, feed)| feed).collect();
+        let mut file = File::create(&self.path).chain_err(|| {
+            ErrorKind::DatabaseSave(self.path.to_owned())
+        })?;
+        serde_json::to_writer(&mut file, &feeds_list).chain_err(
+            || {
+                ErrorKind::DatabaseSave(self.path.to_owned())
+            },
+        )
     }
 }
 
@@ -228,20 +224,11 @@ impl Clone for Database {
 }
 
 fn gen_item_hash(item: &feed::Item) -> u64 {
-    item.id
-        .as_ref()
-        .map(|id| get_hash(&id))
-        .unwrap_or_else(|| {
-            let title = item.title
-                .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or_default();
-            let link = item.link
-                .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or_default();
-            get_hash(&format!("{}{}", title, link))
-        })
+    item.id.as_ref().map(|id| get_hash(&id)).unwrap_or_else(|| {
+        let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_default();
+        let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_default();
+        get_hash(&format!("{}{}", title, link))
+    })
 }
 
 impl Database {
@@ -250,10 +237,10 @@ impl Database {
         let subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
         let result = Database {
             inner: Rc::new(RefCell::new(DatabaseInner {
-                                            path: path.to_owned(),
-                                            feeds: feeds,
-                                            subscribers: subscribers,
-                                        })),
+                path: path.to_owned(),
+                feeds: feeds,
+                subscribers: subscribers,
+            })),
         };
 
         result.save()?;
@@ -264,9 +251,12 @@ impl Database {
     pub fn open(path: &str) -> Result<Database> {
         let p = Path::new(path);
         if p.exists() {
-            let f = File::open(path).chain_err(|| ErrorKind::DatabaseOpen(path.to_owned()))?;
-            let feeds_list: Vec<Feed> =
-                serde_json::from_reader(&f).chain_err(|| ErrorKind::DatabaseFormat)?;
+            let f = File::open(path).chain_err(
+                || ErrorKind::DatabaseOpen(path.to_owned()),
+            )?;
+            let feeds_list: Vec<Feed> = serde_json::from_reader(&f).chain_err(
+                || ErrorKind::DatabaseFormat,
+            )?;
 
             let mut feeds: HashMap<FeedID, Feed> = HashMap::with_capacity(feeds_list.len());
             let mut subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
@@ -274,7 +264,8 @@ impl Database {
             for feed in feeds_list {
                 let feed_id = get_hash(&feed.link);
                 for subscriber in &feed.subscribers {
-                    let subscribed_feeds = subscribers.entry(subscriber.to_owned())
+                    let subscribed_feeds = subscribers
+                        .entry(subscriber.to_owned())
                         .or_insert_with(HashSet::new);
                     subscribed_feeds.insert(feed_id);
                 }
@@ -282,12 +273,12 @@ impl Database {
             }
 
             Ok(Database {
-                   inner: Rc::new(RefCell::new(DatabaseInner {
-                                                   path: path.to_owned(),
-                                                   feeds: feeds,
-                                                   subscribers: subscribers,
-                                               })),
-               })
+                inner: Rc::new(RefCell::new(DatabaseInner {
+                    path: path.to_owned(),
+                    feeds: feeds,
+                    subscribers: subscribers,
+                })),
+            })
         } else {
             Database::create(path)
         }
@@ -317,11 +308,12 @@ impl Database {
         self.inner.borrow().is_subscribed(subscriber, rss_link)
     }
 
-    pub fn subscribe(&self,
-                     subscriber: SubscriberID,
-                     rss_link: &str,
-                     rss: &feed::RSS)
-                     -> Result<()> {
+    pub fn subscribe(
+        &self,
+        subscriber: SubscriberID,
+        rss_link: &str,
+        rss: &feed::RSS,
+    ) -> Result<()> {
         self.inner.borrow_mut().subscribe(subscriber, rss_link, rss)
     }
 

@@ -19,14 +19,14 @@ lazy_static! {
 }
 
 pub trait FromXml: Sized {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
-                                     start: &BytesStart)
-                                     -> Result<Self>;
+    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, start: &BytesStart)
+        -> Result<Self>;
 }
 
-fn parse_atom_link<B: std::io::BufRead>(reader: &mut XmlReader<B>,
-                                        attributes: Attributes)
-                                        -> Option<String> {
+fn parse_atom_link<B: std::io::BufRead>(
+    reader: &mut XmlReader<B>,
+    attributes: Attributes,
+) -> Option<String> {
     let mut link_tmp = None;
     let mut is_alternate = true;
     for attribute in attributes {
@@ -69,9 +69,10 @@ fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
 }
 
 impl FromXml for Option<String> {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
-                                     _start: &BytesStart)
-                                     -> Result<Self> {
+    fn from_xml<B: std::io::BufRead>(
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> Result<Self> {
         let mut buf = Vec::new();
         let mut content: Option<String> = None;
         loop {
@@ -106,9 +107,10 @@ pub struct RSS {
 }
 
 impl FromXml for RSS {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
-                                     _start: &BytesStart)
-                                     -> Result<Self> {
+    fn from_xml<B: std::io::BufRead>(
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> Result<Self> {
         let mut buf = Vec::new();
         let mut rss = RSS::default();
         loop {
@@ -167,9 +169,10 @@ pub struct Item {
 }
 
 impl FromXml for Item {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>,
-                                     _start: &BytesStart)
-                                     -> Result<Self> {
+    fn from_xml<B: std::io::BufRead>(
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> Result<Self> {
         let mut buf = Vec::new();
         let mut item = Item::default();
         loop {
@@ -252,7 +255,9 @@ fn set_url_relative_to_absolute(link: &mut String, host: &str) {
 }
 
 fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
-    let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| r.get(0).unwrap().as_str());
+    let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| {
+        r.get(0).unwrap().as_str()
+    });
     match rss.link.as_str() {
         "" | "/" => rss.link = rss_host.to_owned(),
         _ => set_url_relative_to_absolute(&mut rss.link, rss_host),
@@ -266,9 +271,10 @@ fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     rss
 }
 
-pub fn fetch_feed<'a>(session: &Session,
-                      link: String)
-                      -> impl Future<Item = RSS, Error = Error> + 'a {
+pub fn fetch_feed<'a>(
+    session: &Session,
+    link: String,
+) -> impl Future<Item = RSS, Error = Error> + 'a {
     let mut req = Easy::new();
     let buf = Arc::new(Mutex::new(Vec::new()));
     {
@@ -276,40 +282,48 @@ pub fn fetch_feed<'a>(session: &Session,
         req.get(true).unwrap();
         req.url(&link).unwrap();
         req.accept_encoding("").unwrap(); // accept all encoding
-        req.useragent(concat!(env!("CARGO_PKG_NAME"),
-                               "/",
-                               env!("CARGO_PKG_VERSION"),
-                               " (",
-                               env!("CARGO_PKG_HOMEPAGE"),
-                               ")"))
-            .unwrap();
+        req.useragent(concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION"),
+            " (",
+            env!("CARGO_PKG_HOMEPAGE"),
+            ")"
+        )).unwrap();
         req.follow_location(true).unwrap();
         req.timeout(Duration::from_secs(10)).unwrap();
         req.write_function(move |data| {
-                                buf.lock().unwrap().extend_from_slice(data);
-                                Ok(data.len())
-                            })
-            .unwrap();
+            buf.lock().unwrap().extend_from_slice(data);
+            Ok(data.len())
+        }).unwrap();
     }
-    session.perform(req).map_err(|e| e.into()).and_then(move |mut resp| {
-        let response_code = resp.response_code().unwrap();
-        if response_code != 200 {
-            return Err(ErrorKind::Http(response_code).into());
-        }
-        let buf = buf.lock().unwrap();
-        let rss = parse(buf.as_slice())?;
-        Ok(fix_relative_url(rss, &link))
-    })
+    session.perform(req).map_err(|e| e.into()).and_then(
+        move |mut resp| {
+            let response_code = resp.response_code().unwrap();
+            if response_code != 200 {
+                return Err(ErrorKind::Http(response_code).into());
+            }
+            let buf = buf.lock().unwrap();
+            let rss = parse(buf.as_slice())?;
+            Ok(fix_relative_url(rss, &link))
+        },
+    )
 }
 
 #[test]
 fn test_host_regex() {
     assert!(HOST.captures("").is_none());
     assert!(HOST.captures("/path").is_none());
-    assert_eq!(&HOST.captures("example.com/path").unwrap()[0],
-               "example.com");
-    assert_eq!(&HOST.captures("http://example.com/path").unwrap()[0],
-               "http://example.com");
-    assert_eq!(&HOST.captures("https://example.com/path").unwrap()[0],
-               "https://example.com");
+    assert_eq!(
+        &HOST.captures("example.com/path").unwrap()[0],
+        "example.com"
+    );
+    assert_eq!(
+        &HOST.captures("http://example.com/path").unwrap()[0],
+        "http://example.com"
+    );
+    assert_eq!(
+        &HOST.captures("https://example.com/path").unwrap()[0],
+        "https://example.com"
+    );
 }
