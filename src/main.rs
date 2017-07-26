@@ -19,8 +19,6 @@ extern crate lazy_static;
 extern crate regex;
 extern crate pinyin_order;
 
-use std::io::prelude::*;
-
 use tokio_core::reactor::Core;
 use futures::Stream;
 
@@ -35,10 +33,7 @@ mod checker;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
-        writeln!(&mut std::io::stderr(),
-                 "Usage: {} DATAFILE TELEGRAM-BOT-TOKEN",
-                 args[0])
-                .unwrap();
+        eprintln!("Usage: {} DATAFILE TELEGRAM-BOT-TOKEN", args[0]);
         std::process::exit(1);
     }
     let datafile = &args[1];
@@ -46,12 +41,12 @@ fn main() {
 
     let db = data::Database::open(datafile)
         .map_err(|e| {
-            writeln!(&mut std::io::stderr(), "error: {}", e).unwrap();
+            eprintln!("error: {}", e);
             for e in e.iter().skip(1) {
-                writeln!(&mut std::io::stderr(), "caused by: {}", e).unwrap();
+                eprintln!("caused by: {}", e);
             }
             if let Some(backtrace) = e.backtrace() {
-                writeln!(&mut std::io::stderr(), "backtrace: {:?}", backtrace).unwrap();
+                eprintln!("backtrace: {:?}", backtrace);
             }
             std::process::exit(1);
         })
@@ -71,9 +66,12 @@ fn main() {
 
     checker::spawn_subscriber_alive_checker(bot.clone(), db, lp.handle());
 
-    loop {
-        if let Err(err) = lp.run(bot.get_stream().for_each(|_| Ok(()))) {
-            error!("telebot: {:?}", err);
-        }
-    }
+    let s = bot.get_stream()
+        .map(|_| ())
+        .or_else(|e| {
+            error!("telebot: {:?}", e);
+            Ok::<(), ()>(())
+        })
+        .for_each(|_| Ok(()));
+    lp.run(s).unwrap();
 }
