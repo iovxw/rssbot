@@ -11,7 +11,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::sync::{Arc, Mutex};
 
-use curl::easy::{Easy, List, InfoType};
+use curl::easy::{Easy, List};
 use tokio_curl::Session;
 use tokio_core::reactor::{Handle, Interval};
 use serde::Deserialize;
@@ -79,56 +79,35 @@ impl Bot {
         let mut header = List::new();
         header.append("Content-Type: application/json").unwrap();
 
-        let mut a = Easy::new();
-        a.http_headers(header).unwrap();
-        a.post_fields_copy(msg.as_bytes()).unwrap();
-        a.post(true).unwrap();
+        let mut req = Easy::new();
+        req.http_headers(header).unwrap();
+        req.post_fields_copy(msg.as_bytes()).unwrap();
+        req.post(true).unwrap();
 
-        self._fetch(func, a)
+        self.fetch(func, req)
     }
 
     /// calls cURL and parses the result for an error
-    pub fn _fetch<'a, T: Deserialize + 'a>(
+    pub fn fetch<'a, T: Deserialize + 'a>(
         &self,
         func: &str,
-        mut a: Easy,
+        mut req: Easy,
     ) -> impl Future<Item = T, Error = Error> + 'a {
         let result = Arc::new(Mutex::new(Vec::new()));
 
-        a.url(&format!(
+        req.url(&format!(
             "https://api.telegram.org/bot{}/{}",
             self.key,
             func
         )).unwrap();
 
         let r2 = result.clone();
-        a.write_function(move |data| {
+        req.write_function(move |data| {
             r2.lock().unwrap().extend_from_slice(data);
             Ok(data.len())
         }).unwrap();
 
-        // print debug information
-        a.debug_function(|info, data| {
-            match info {
-                InfoType::DataOut => {
-                    println!("DataOut");
-                }
-                InfoType::Text => {
-                    println!("Text");
-                }
-                InfoType::HeaderOut => {
-                    println!("HeaderOut");
-                }
-                InfoType::SslDataOut => {
-                    println!("SslDataOut");
-                }
-                _ => println!("something else"),
-            }
-
-            println!("{:?}", String::from_utf8_lossy(data));
-        }).unwrap();
-
-        self.session.perform(a).map_err(|e| e.into()).and_then(
+        self.session.perform(req).map_err(|e| e.into()).and_then(
             move |_| {
                 let response = result.lock().unwrap();
                 let response = str::from_utf8(&response).unwrap();
@@ -205,7 +184,10 @@ impl RcBot {
         ).unwrap()
             .map_err(|_| Error::Unknown)
             .and_then(move |_| {
-                self.get_updates().offset(self.inner.last_id.get()).send()
+                self.get_updates()
+                    .offset(self.inner.last_id.get())
+                    .timeout(60)
+                    .send()
             })
             .map(|(_, x)| {
                 stream::iter(x.0.into_iter().map(|x| Ok(x)).collect::<Vec<
