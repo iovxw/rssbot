@@ -5,16 +5,15 @@ use objects;
 use error::Error;
 
 use std::str;
-use std::io;
 use std::time::Duration;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::sync::{Arc, Mutex};
 
-use curl::easy::{Easy, List, Form, InfoType};
+use curl::easy::{Easy, List, InfoType};
 use tokio_curl::Session;
-use tokio_core::reactor::{Handle, Core, Interval};
+use tokio_core::reactor::{Handle, Interval};
 use serde_json;
 use serde_json::value::Value;
 use futures::{Future, IntoFuture, Stream, stream};
@@ -83,44 +82,6 @@ impl Bot {
         a.http_headers(header).unwrap();
         a.post_fields_copy(msg.as_bytes()).unwrap();
         a.post(true).unwrap();
-
-        self._fetch(func, a)
-    }
-
-    /// Creates a new request with some byte content (e.g. a file). The method properties have to be
-    /// in the formdata setup and cannot be sent as JSON.
-    pub fn fetch_formdata<'a, T>(&self,
-                                 func: &str,
-                                 msg: Value,
-                                 mut file: T,
-                                 kind: &str,
-                                 file_name: &str)
-                                 -> impl Future<Item = String, Error = Error> + 'a
-        where T: io::Read
-    {
-        let mut content = Vec::new();
-
-        let mut a = Easy::new();
-        let mut form = Form::new();
-
-        // try to read the byte content to a vector
-        let _ = file.read_to_end(&mut content).unwrap();
-
-        // add properties
-        for (key, val) in msg.as_object().unwrap().iter() {
-            form.part(key).contents(format!("{:?}", val).as_bytes()).add().unwrap();
-        }
-
-        // add the file
-        form.part(kind)
-            .buffer(file_name, content)
-            .content_type("application/octet-stream")
-            .add()
-            .unwrap();
-
-        // create a http post request
-        a.post(true).unwrap();
-        a.httppost(form).unwrap();
 
         self._fetch(func, a)
     }
@@ -281,10 +242,5 @@ impl RcBot {
                     return Some((self.clone(), val));
                 }
             })
-    }
-
-    /// helper function to start the event loop
-    pub fn run<'a>(&'a self, core: &mut Core) -> Result<(), Error> {
-        core.run(self.get_stream().for_each(|_| Ok(())).into_future())
     }
 }
