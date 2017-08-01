@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex};
 use curl::easy::{Easy, List, InfoType};
 use tokio_curl::Session;
 use tokio_core::reactor::{Handle, Interval};
+use serde::Deserialize;
 use serde_json;
-use serde_json::value::Value;
 use futures::{Future, IntoFuture, Stream, stream};
 use futures::sync::mpsc;
 use futures::sync::mpsc::UnboundedSender;
@@ -69,10 +69,11 @@ impl Bot {
     /// Creates a new request and adds a JSON message to it. The returned Future contains a the
     /// reply as a string.  This method should be used if no file is added because a JSON msg is
     /// always compacter than a formdata one.
-    pub fn fetch_json<'a>(&self,
-                          func: &str,
-                          msg: &str)
-                          -> impl Future<Item = String, Error = Error> + 'a {
+    pub fn fetch_json<'a, T: Deserialize + 'a>(
+        &self,
+        func: &str,
+        msg: &str,
+    ) -> impl Future<Item = T, Error = Error> + 'a {
         println!("Send JSON: {}", msg);
 
         let mut header = List::new();
@@ -87,78 +88,72 @@ impl Bot {
     }
 
     /// calls cURL and parses the result for an error
-    pub fn _fetch<'a>(&self,
-                      func: &str,
-                      mut a: Easy)
-                      -> impl Future<Item = String, Error = Error> + 'a {
+    pub fn _fetch<'a, T: Deserialize + 'a>(
+        &self,
+        func: &str,
+        mut a: Easy,
+    ) -> impl Future<Item = T, Error = Error> + 'a {
         let result = Arc::new(Mutex::new(Vec::new()));
 
-        a.url(&format!("https://api.telegram.org/bot{}/{}", self.key, func)).unwrap();
+        a.url(&format!(
+            "https://api.telegram.org/bot{}/{}",
+            self.key,
+            func
+        )).unwrap();
 
         let r2 = result.clone();
         a.write_function(move |data| {
-                r2.lock().unwrap().extend_from_slice(data);
-                Ok(data.len())
-            })
-            .unwrap();
+            r2.lock().unwrap().extend_from_slice(data);
+            Ok(data.len())
+        }).unwrap();
 
         // print debug information
         a.debug_function(|info, data| {
-                match info {
-                    InfoType::DataOut => {
-                        println!("DataOut");
-                    }
-                    InfoType::Text => {
-                        println!("Text");
-                    }
-                    InfoType::HeaderOut => {
-                        println!("HeaderOut");
-                    }
-                    InfoType::SslDataOut => {
-                        println!("SslDataOut");
-                    }
-                    _ => println!("something else"),
+            match info {
+                InfoType::DataOut => {
+                    println!("DataOut");
                 }
+                InfoType::Text => {
+                    println!("Text");
+                }
+                InfoType::HeaderOut => {
+                    println!("HeaderOut");
+                }
+                InfoType::SslDataOut => {
+                    println!("SslDataOut");
+                }
+                _ => println!("something else"),
+            }
 
-                println!("{:?}", String::from_utf8_lossy(data));
-            })
-            .unwrap();
-        //a.verbose(true).unwrap();
-        //a.show_header(true).unwrap();
+            println!("{:?}", String::from_utf8_lossy(data));
+        }).unwrap();
 
-        self.session
-            .perform(a)
-            .map_err(|_| Error::TokioCurl)
-            .map(move |_| {
+        self.session.perform(a).map_err(|e| e.into()).and_then(
+            move |_| {
                 let response = result.lock().unwrap();
-                String::from(str::from_utf8(&response).unwrap())
-            })
-            .and_then(|x| {
-                // try to parse the result as a JSON and find the OK field.
-                // If the ok field is true, then the string in "result" will be returned
-                if let Ok(req) = serde_json::from_str::<Value>(&x) {
-                    if let (Some(ok), res) = (req.get("ok").and_then(Value::as_bool),
-                                              req.get("result")) {
-                        if ok {
-                            if let Some(result) = res {
-                                let answer = serde_json::to_string(result).unwrap();
-
-                                return Ok(answer);
-                            }
-                        }
-
-                        match req.get("description").and_then(Value::as_str) {
-                            Some(err) => Err(Error::Telegram(err.into())),
-                            None => Err(Error::Telegram("Unknown".into())),
-                        }
-                    } else {
-                        return Err(Error::JSON);
-                    }
+                let response = str::from_utf8(&response).unwrap();
+                let response: Response<T> = serde_json::from_str(&response)?;
+                if response.ok {
+                    Ok(response.result.unwrap())
                 } else {
-                    return Err(Error::JSON);
+                    Err(Error::Telegram(
+                        response.error_code.unwrap(),
+                        response.description.unwrap(),
+                        response.parameters,
+                    ))
                 }
-            })
+            },
+        )
     }
+}
+
+#[derive(Deserialize)]
+struct Response<T: Deserialize> {
+    ok: bool,
+    result: Option<T>,
+    error_code: Option<u32>,
+    description: Option<String>,
+    parameters: Option<objects::ResponseParameters>,
 }
 
 impl RcBot {
@@ -171,9 +166,10 @@ impl RcBot {
 
     /// Creates a new command and returns a stream which
     /// will yield a message when the command is send
-    pub fn new_cmd(&self,
-                   cmd: &str)
-                   -> impl Stream<Item = (RcBot, objects::Message), Error = Error> {
+    pub fn new_cmd(
+        &self,
+        cmd: &str,
+    ) -> impl Stream<Item = (RcBot, objects::Message), Error = Error> {
         let (sender, receiver) = mpsc::unbounded();
 
         self.inner.handlers.borrow_mut().insert(cmd.into(), sender);
@@ -183,29 +179,41 @@ impl RcBot {
 
     /// Register a new commnd
     pub fn register<T>(&self, hnd: T)
-        where T: Stream + 'static
+    where
+        T: Stream + 'static,
     {
-        self.inner.handle.spawn(hnd.for_each(|_| Ok(())).into_future().map(|_| ()).map_err(|_| ()));
+        self.inner.handle.spawn(
+            hnd.for_each(|_| Ok(()))
+                .into_future()
+                .map(|_| ())
+                .map_err(|_| ()),
+        );
     }
 
     /// The main update loop, the update function is called every update_interval milliseconds
     /// When an update is available the last_id will be updated and the message is filtered
     /// for commands
     /// The message is forwarded to the returned stream if no command was found
-    pub fn get_stream<'a>(&'a self)
-                          -> impl Stream<Item = (RcBot, objects::Update), Error = Error> + 'a {
+    pub fn get_stream<'a>(
+        &'a self,
+    ) -> impl Stream<Item = (RcBot, objects::Update), Error = Error> + 'a {
         use functions::*;
 
-        Interval::new(Duration::from_millis(self.inner.update_interval.get()),
-                      &self.inner.handle)
-            .unwrap()
+        Interval::new(
+            Duration::from_millis(self.inner.update_interval.get()),
+            &self.inner.handle,
+        ).unwrap()
             .map_err(|_| Error::Unknown)
-            .and_then(move |_| self.get_updates().offset(self.inner.last_id.get()).send())
+            .and_then(move |_| {
+                self.get_updates().offset(self.inner.last_id.get()).send()
+            })
             .map(|(_, x)| {
-                stream::iter(x.0
-                    .into_iter()
-                    .map(|x| Ok(x))
-                    .collect::<Vec<Result<objects::Update, Error>>>())
+                stream::iter(x.0.into_iter().map(|x| Ok(x)).collect::<Vec<
+                    Result<
+                        objects::Update,
+                        Error,
+                    >,
+                >>())
             })
             .flatten()
             .and_then(move |x| {
@@ -224,7 +232,8 @@ impl RcBot {
                         if let Some(cmd) = content.next() {
                             let s: Vec<&str> = cmd.split("@").take(2).collect();
                             if s.len() > 0 && (s.len() < 2 || s[1] == self.inner.username) &&
-                               self.inner.handlers.borrow().contains_key(s[0]) {
+                                self.inner.handlers.borrow().contains_key(s[0])
+                            {
                                 message.text = Some(content.collect::<Vec<&str>>().join(" "));
 
                                 forward = Some(s[0].into());

@@ -292,10 +292,8 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
             pub fn send<'a>(self)
                             -> impl Future<Item=(RcBot, objects::#answer), Error=Error> + 'a {
                 let msg = serde_json::to_string(&self.inner).unwrap();
-                Box::new(self.bot.fetch_json(#function, &msg)
-                         .map(move |x| (RcBot { inner: self.bot.clone() },
-                                        serde_json::from_str::<objects::#answer>(&x)
-                                        .unwrap())))
+                self.bot.fetch_json(#function, &msg)
+                    .map(move |x| (RcBot { inner: self.bot.clone() }, x))
             }
 
             #(

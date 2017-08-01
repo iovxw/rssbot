@@ -25,7 +25,7 @@ pub fn spawn_subscriber_alive_checker(bot: telebot::RcBot, db: data::Database, h
                             .send()
                             .map_err(move |e| {
                                 match e {
-                                    telebot::error::Error::Telegram(ref s)
+                                    telebot::error::Error::Telegram(_, ref s, _)
                                         if chat_is_unavailable(s) => {
                                         db.delete_subscriber(subscriber);
                                     }

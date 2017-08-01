@@ -427,7 +427,7 @@ fn check_channel<'a>(
             bot.get_chat(channel)
                 .send()
                 .or_else(move |e| {
-                    if let telebot::Error::Telegram(err_msg) = e {
+                    if let telebot::Error::Telegram(_, err_msg, _) = e {
                         Err((bot, chat_id, msg_id, err_msg))
                     } else {
                         Ok(e)
@@ -468,7 +468,7 @@ fn check_channel<'a>(
             bot.unban_chat_administrators(channel_id)
                 .send()
                 .or_else(move |e| {
-                    if let telebot::Error::Telegram(err_msg) = e {
+                    if let telebot::Error::Telegram(_, err_msg, _) = e {
                         Err((bot, chat_id, msg_id, err_msg))
                     } else {
                         Ok(e)

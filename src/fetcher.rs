@@ -109,7 +109,7 @@ fn fetch_feed_updates<'a>(
                         let db = db.clone();
                         let r = m.map_err(move |e| {
                             match e {
-                                telebot::error::Error::Telegram(ref s)
+                                telebot::error::Error::Telegram(_, ref s, _)
                                     if chat_is_unavailable(s) => {
                                     db.delete_subscriber(subscriber);
                                 }
@@ -158,7 +158,7 @@ fn fetch_feed_updates<'a>(
                 let bot = bot.clone();
                 let r = send_multiple_messages(&bot, subscriber, msgs.clone()).map_err(move |e| {
                     match e {
-                        telebot::error::Error::Telegram(ref s) if chat_is_unavailable(s) => {
+                        telebot::error::Error::Telegram(_, ref s, _) if chat_is_unavailable(s) => {
                             db.delete_subscriber(subscriber);
                         }
                         _ => {
