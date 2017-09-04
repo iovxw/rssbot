@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use curl::easy::{Easy, List};
 use tokio_curl::Session;
 use tokio_core::reactor::{Handle, Interval};
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_json;
 use futures::{Future, IntoFuture, Stream, stream};
 use futures::sync::mpsc;
@@ -69,7 +69,7 @@ impl Bot {
     /// Creates a new request and adds a JSON message to it. The returned Future contains a the
     /// reply as a string.  This method should be used if no file is added because a JSON msg is
     /// always compacter than a formdata one.
-    pub fn fetch_json<'a, T: Deserialize + 'a>(
+    pub fn fetch_json<'a, T: DeserializeOwned + 'a>(
         &self,
         func: &str,
         msg: &str,
@@ -88,7 +88,7 @@ impl Bot {
     }
 
     /// calls cURL and parses the result for an error
-    pub fn fetch<'a, T: Deserialize + 'a>(
+    pub fn fetch<'a, T: DeserializeOwned + 'a>(
         &self,
         func: &str,
         mut req: Easy,
@@ -127,7 +127,7 @@ impl Bot {
 }
 
 #[derive(Deserialize)]
-struct Response<T: Deserialize> {
+struct Response<T> {
     ok: bool,
     result: Option<T>,
     error_code: Option<u32>,
@@ -189,14 +189,7 @@ impl RcBot {
                     .timeout(60)
                     .send()
             })
-            .map(|(_, x)| {
-                stream::iter(x.0.into_iter().map(|x| Ok(x)).collect::<Vec<
-                    Result<
-                        objects::Update,
-                        Error,
-                    >,
-                >>())
-            })
+            .map(|(_, x)| stream::iter_ok(x.0))
             .flatten()
             .and_then(move |x| {
                 if self.inner.last_id.get() < x.update_id as u32 + 1 {
@@ -226,7 +219,7 @@ impl RcBot {
 
                 if let Some(cmd) = forward {
                     if let Some(sender) = self.inner.handlers.borrow_mut().get_mut(&cmd) {
-                        sender.send((self.clone(), val.message.unwrap())).unwrap();
+                        sender.unbounded_send((self.clone(), val.message.unwrap())).unwrap();
                     }
                     return None;
                 } else {
