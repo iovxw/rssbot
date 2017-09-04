@@ -1,3 +1,4 @@
+#![allow(unused_doc_comment)] // should be removed in next error-chain release
 error_chain! {
     errors {
         AlreadySubscribed
