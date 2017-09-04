@@ -15,7 +15,7 @@ regex = "0.2"
 pinyin-order = "0.1"
 futures-await = { git = 'https://github.com/alexcrichton/futures-await' }
 
-quick-xml = "0.7"
+quick-xml = "0.9"
 error-chain = "*"
 
 telebot = { path = "./telebot" }
