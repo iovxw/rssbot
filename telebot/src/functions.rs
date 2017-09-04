@@ -154,7 +154,7 @@ pub struct GetChat {
 #[derive(TelegramFunction,  Serialize)]
 #[call = "getChatAdministrators"]
 #[answer = "Vector<objects::ChatMember>"]
-#[function = "unban_chat_administrators"]
+#[function = "get_chat_administrators"]
 pub struct GetChatAdministrators {
     chat_id: ChatID,
 }

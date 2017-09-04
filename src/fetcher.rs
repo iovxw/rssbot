@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use telebot;
 use telebot::functions::*;
 use tokio_core::reactor::{Interval, Handle, Timeout};
-use futures::{self, Future, Stream, IntoFuture};
+use futures::prelude::*;
 use tokio_curl::Session;
 use regex::Regex;
 
@@ -22,35 +22,43 @@ lazy_static!{
 }
 
 pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
-    handle.clone().spawn(
-        Interval::new(Duration::from_secs(FREQUENCY_SECOND), &handle)
+    let handle2 = handle.clone();
+    let lop =
+        async_block! {
+        #[async]
+        for _ in Interval::new(Duration::from_secs(FREQUENCY_SECOND), &handle)
             .expect("failed to start feed loop")
             .map_err(|e| error!("feed loop error: {}", e))
-            .for_each(move |_| {
-                let feeds = db.get_all_feeds();
-                let grouped_feeds = grouping_by_host(feeds);
-                let handle2 = handle.clone();
-                let bot = bot.clone();
-                let db = db.clone();
-                let fetcher = futures::stream::iter(grouped_feeds.into_iter().map(Ok))
-                    .for_each(move |group| {
-                        let session = Session::new(handle2.clone());
-                        let bot = bot.clone();
-                        let db = db.clone();
-                        let group_fetcher = futures::stream::iter(group.into_iter().map(Ok))
-                            .for_each(move |feed| {
-                                fetch_feed_updates(bot.clone(), db.clone(), &session, feed)
-                                    .then(|_| Ok(()))
-                            });
-                        handle2.spawn(group_fetcher);
-                        Timeout::new(Duration::from_secs(1), &handle2)
-                            .expect("failed to start sleep")
-                            .map_err(|e| error!("feed loop sleep error: {}", e))
-                    });
-                handle.spawn(fetcher);
+        {
+            let feeds = db.get_all_feeds();
+            let grouped_feeds = grouping_by_host(feeds);
+            let handle2 = handle.clone();
+            let bot = bot.clone();
+            let db = db.clone();
+            let fetcher = async_block! {
+                for group in grouped_feeds {
+                    let session = Session::new(handle2.clone());
+                    let bot = bot.clone();
+                    let db = db.clone();
+                    let group_fetcher = async_block! {
+                        for feed in group {
+                            await!(fetch_feed_updates(bot.clone(), db.clone(),
+                                                      session.clone(), feed))?;
+                        }
+                        Ok(())
+                    };
+                    handle2.spawn(group_fetcher);
+                    await!(Timeout::new(Duration::from_secs(1), &handle2)
+                           .expect("failed to start sleep"))
+                        .map_err(|e| error!("feed loop sleep error: {}", e))?;
+                }
                 Ok(())
-            }),
-    )
+            };
+            handle.spawn(fetcher);
+        }
+        Ok(())
+    };
+    handle2.spawn(lop)
 }
 
 fn grouping_by_host(feeds: Vec<data::Feed>) -> Vec<Vec<data::Feed>> {
@@ -70,104 +78,87 @@ fn get_host(url: &str) -> &str {
     )
 }
 
+#[async]
 fn fetch_feed_updates<'a>(
     bot: telebot::RcBot,
     db: data::Database,
-    session: &Session,
+    session: Session,
     feed: data::Feed,
-) -> impl Future<Item = (), Error = ()> + 'a {
-    let bot_ = bot.clone();
-    let db_ = db.clone();
-    let feed_ = feed.clone();
-    feed::fetch_feed(session, feed.link.to_owned())
-        .map(move |rss| (bot_, db_, rss, feed_))
-        .or_else(move |e| {
+) -> Result<(), ()> {
+    let rss = match await!(feed::fetch_feed(&session, feed.link.to_owned())) {
+        Ok(rss) => rss,
+        Err(e) => {
             // 1440 * 5 minute = 5 days
             if db.inc_error_count(&feed.link) > 1440 {
-                Err((bot, db, feed))
-            } else {
-                Ok(())
-            }.into_future()
-                .or_else(|(bot, db, feed)| {
-                    db.reset_error_count(&feed.link);
-                    let err_msg = to_chinese_error_msg(e);
-                    let mut msgs = Vec::with_capacity(feed.subscribers.len());
-                    for &subscriber in &feed.subscribers {
-                        let m = bot.message(
-                            subscriber,
-                            format!(
-                                "《<a href=\"{}\">{}</a>》\
-                                                     已经连续 5 天拉取出错 ({}),\
-                                                     可能已经关闭, 请取消订阅",
-                                EscapeUrl(&feed.link),
-                                Escape(&feed.title),
-                                Escape(&err_msg)
-                            ),
-                        ).parse_mode("HTML")
-                            .disable_web_page_preview(true)
-                            .send();
-                        let db = db.clone();
-                        let r = m.map_err(move |e| {
-                            match e {
-                                telebot::error::Error::Telegram(_, ref s, _)
-                                    if chat_is_unavailable(s) => {
-                                    db.delete_subscriber(subscriber);
-                                }
-                                _ => {
-                                    warn!("failed to send error to {}, {:?}", subscriber, e);
-                                }
-                            };
-                        });
-                        // if not use Box, rustc will panic
-                        msgs.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
-                    }
-                    futures::future::join_all(msgs).then(|_| Err(()))
-                })
-                .and_then(|_| Err(()))
-        })
-        .and_then(|(bot, db, rss, feed)| {
-            if rss.title != feed.title {
-                db.update_title(&feed.link, &rss.title);
-            }
-            let updates = db.update(&feed.link, rss.items);
-            if updates.is_empty() {
-                futures::future::err(())
-            } else {
-                futures::future::ok((bot, db, feed, rss.title, rss.link, updates))
-            }
-        })
-        .and_then(|(bot, db, feed, rss_title, rss_link, updates)| {
-            let msgs =
-                format_and_split_msgs(format!("<b>{}</b>", Escape(&rss_title)), &updates, |item| {
-                    let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(
-                        || &rss_title,
-                    );
-                    let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(
-                        || &rss_link,
-                    );
-                    format!(
-                        "<a href=\"{}\">{}</a>",
-                        EscapeUrl(link),
-                        Escape(&truncate_message(title, TELEGRAM_MAX_MSG_LEN - 500))
-                    )
-                });
-
-            let mut msg_futures = Vec::with_capacity(feed.subscribers.len());
-            for &subscriber in &feed.subscribers {
-                let db = db.clone();
-                let bot = bot.clone();
-                let r = send_multiple_messages(&bot, subscriber, msgs.clone()).map_err(move |e| {
-                    match e {
-                        telebot::error::Error::Telegram(_, ref s, _) if chat_is_unavailable(s) => {
+                db.reset_error_count(&feed.link);
+                let err_msg = to_chinese_error_msg(e);
+                let msg = format!(
+                    "《<a href=\"{}\">{}</a>》\
+                     已经连续 5 天拉取出错 ({}),\
+                     可能已经关闭, 请取消订阅",
+                    EscapeUrl(&feed.link),
+                    Escape(&feed.title),
+                    Escape(&err_msg)
+                );
+                for subscriber in feed.subscribers {
+                    let m = bot.message(subscriber, msg.clone())
+                        .parse_mode("HTML")
+                        .disable_web_page_preview(true)
+                        .send();
+                    if let Err(e) = await!(m) {
+                        if chat_is_unavailable(&e) {
                             db.delete_subscriber(subscriber);
+                        } else {
+                            warn!("failed to send error to {}, {:?}", subscriber, e);
                         }
-                        _ => {
-                            warn!("failed to send updates to {}, {:?}", subscriber, e);
-                        }
-                    };
-                });
-                msg_futures.push(Box::new(r) as Box<Future<Item = _, Error = _>>);
+                    }
+                }
             }
-            futures::future::join_all(msg_futures).then(|_| Ok(()))
-        })
+            return Ok(());
+        }
+    };
+    if rss.title != feed.title {
+        db.update_title(&feed.link, &rss.title);
+    }
+    let feed::RSS {
+        title: rss_title,
+        link: rss_link,
+        items: rss_items,
+    } = rss;
+    let updates = db.update(&feed.link, rss_items);
+    if updates.is_empty() {
+        return Ok(());
+    }
+
+    let msgs = format_and_split_msgs(
+        format!("<b>{}</b>", Escape(&rss_title)),
+        &updates,
+        move |item| {
+            let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(
+                || &rss_title,
+            );
+            let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(
+                || &rss_link,
+            );
+            format!(
+                "<a href=\"{}\">{}</a>",
+                EscapeUrl(link),
+                Escape(&truncate_message(title, TELEGRAM_MAX_MSG_LEN - 500))
+            )
+        },
+    );
+
+    for subscriber in feed.subscribers {
+        let db = db.clone();
+        let bot = bot.clone();
+        let r = send_multiple_messages(&bot, subscriber, msgs.clone());
+        if let Err(e) = await!(r) {
+            if chat_is_unavailable(&e) {
+                db.delete_subscriber(subscriber);
+            } else {
+                warn!("failed to send updates to {}, {:?}", subscriber, e);
+            }
+        }
+    }
+    Ok(())
 }

@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait)]
+#![feature(conservative_impl_trait, proc_macro, generators)]
 
 #[macro_use]
 extern crate log;
@@ -10,7 +10,7 @@ extern crate serde_json;
 extern crate serde_derive;
 extern crate quick_xml;
 extern crate curl;
-extern crate futures;
+extern crate futures_await as futures;
 extern crate tokio_core;
 extern crate tokio_curl;
 extern crate telebot;
@@ -26,7 +26,7 @@ mod errors;
 mod feed;
 mod data;
 mod utlis;
-mod cmdhandels;
+mod cmdhandles;
 mod fetcher;
 mod checker;
 
@@ -60,7 +60,7 @@ fn main() {
         .expect("failed to initialize bot")
         .update_interval(200);
 
-    cmdhandels::register_commands(&bot, &db, lp.handle());
+    cmdhandles::register_commands(&bot, &db, lp.handle());
 
     fetcher::spawn_fetcher(bot.clone(), db.clone(), lp.handle());
 

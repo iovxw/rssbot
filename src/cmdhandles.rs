@@ -1,6 +1,7 @@
 use telebot::functions::*;
 use tokio_core::reactor::Handle;
-use futures::{future, Future, Stream, IntoFuture};
+use futures::future;
+use futures::prelude::*;
 use tokio_curl::Session;
 use telebot;
 use pinyin_order;
@@ -319,8 +320,8 @@ fn register_unsubthis(bot: &telebot::RcBot, db: Database) {
                     bot.message(
                         chat_id,
                         "使用方法: \
-                                      使用此命令回复想要退订的 RSS 消息即可退订,\
-                                      不支持 Channel"
+                         使用此命令回复想要退订的 RSS 消息即可退订,\
+                         不支持 Channel"
                             .to_string(),
                     ).send()
                         .then(|result| match result {
@@ -419,140 +420,53 @@ fn check_channel<'a>(
         } else {
             channel.to_owned()
         });
-    bot.message(chat_id, "正在验证 Channel".to_string())
-        .send()
-        .map_err(Some)
-        .and_then(move |(bot, msg)| {
-            let msg_id = msg.message_id;
-            bot.get_chat(channel)
-                .send()
-                .or_else(move |e| {
-                    if let telebot::Error::Telegram(_, err_msg, _) = e {
-                        Err((bot, chat_id, msg_id, err_msg))
-                    } else {
-                        Ok(e)
-                    }.into_future()
-                        .or_else(|(bot, chat_id, msg_id, err_msg)| {
-                            bot.edit_message_text(
-                                chat_id,
-                                msg_id,
-                                format!("无法找到目标 Channel: {}", err_msg),
-                            ).send()
-                                .then(|result| match result {
-                                    Ok(_) => Err(None),
-                                    Err(e) => Err(Some(e)),
-                                })
-                        })
-                        .and_then(|e| Err(Some(e)))
-                })
-                .map(move |(bot, channel)| {
-                    (bot, chat_id, user_id, channel, msg_id)
-                })
-        })
-        .and_then(|(bot, chat_id, user_id, channel, msg_id)| {
-            if channel.kind == "channel" {
-                Ok((bot, chat_id, user_id, channel.id, msg_id))
-            } else {
-                Err((bot, chat_id, msg_id))
-            }.into_future()
-                .or_else(|(bot, chat_id, msg_id)| {
-                    bot.edit_message_text(chat_id, msg_id, "目标需为 Channel".to_string())
-                        .send()
-                        .then(|result| match result {
-                            Ok(_) => Err(None),
-                            Err(e) => Err(Some(e)),
-                        })
-                })
-        })
-        .and_then(|(bot, chat_id, user_id, channel_id, msg_id)| {
-            bot.unban_chat_administrators(channel_id)
-                .send()
-                .or_else(move |e| {
-                    if let telebot::Error::Telegram(_, err_msg, _) = e {
-                        Err((bot, chat_id, msg_id, err_msg))
-                    } else {
-                        Ok(e)
-                    }.into_future()
-                        .or_else(|(bot, chat_id, msg_id, err_msg)| {
-                            bot.edit_message_text(
-                                chat_id,
-                                msg_id,
-                                format!(
-                                    "请先将本 Bot 加入目标 Channel\
-                                                       并设为管理员: {}",
-                                    err_msg
-                                ),
-                            ).send()
-                                .then(|result| match result {
-                                    Ok(_) => Err(None),
-                                    Err(e) => Err(Some(e)),
-                                })
-                        })
-                        .and_then(|e| Err(Some(e)))
-                })
-                .map(move |(bot, admins)| {
-                    let admin_id_list = admins
-                        .iter()
-                        .map(|member| member.user.id)
-                        .collect::<Vec<i64>>();
-                    (bot, chat_id, user_id, admin_id_list, msg_id, channel_id)
-                })
-        })
-        .and_then(|(bot,
-          chat_id,
-          user_id,
-          admin_id_list,
-          msg_id,
-          channel_id)| {
-            if admin_id_list.contains(&bot.inner.id) {
-                Ok((bot, chat_id, user_id, admin_id_list, msg_id, channel_id))
-            } else {
-                Err((bot, chat_id, msg_id))
-            }.into_future()
-                .or_else(|(bot, chat_id, msg_id)| {
-                    bot.edit_message_text(
-                        chat_id,
-                        msg_id,
-                        "请将本 Bot 设为管理员".to_string(),
-                    ).send()
-                        .then(|result| match result {
-                            Ok(_) => Err(None),
-                            Err(e) => Err(Some(e)),
-                        })
-                })
-        })
-        .and_then(|(bot,
-          chat_id,
-          user_id,
-          admin_id_list,
-          msg_id,
-          channel_id)| {
-            if admin_id_list.contains(&user_id) {
-                Ok((bot, chat_id, msg_id, channel_id))
-            } else {
-                Err((bot, chat_id, msg_id))
-            }.into_future()
-                .or_else(|(bot, chat_id, msg_id)| {
-                    bot.edit_message_text(
-                        chat_id,
-                        msg_id,
-                        "该命令只能由 Channel 管理员使用".to_string(),
-                    ).send()
-                        .then(|result| match result {
-                            Ok(_) => Err(None),
-                            Err(e) => Err(Some(e)),
-                        })
-                })
-        })
-        .and_then(|(bot, chat_id, msg_id, channel_id)| {
-            bot.delete_message(chat_id, msg_id)
-                .send()
-                .map_err(Some)
-                .map(move |_| channel_id)
-        })
-        .then(|result| match result {
-            Err(None) => Ok(None),
-            Err(Some(e)) => Err(e),
-            Ok(ok) => Ok(Some(ok)),
-        })
+    let bot = bot.clone();
+    async_block! {
+        let (_, msg) = await!(bot.message(chat_id, "正在验证 Channel".to_string()).send())?;
+        let msg_id = msg.message_id;
+        let (_, channel) = match await!(bot.get_chat(channel).send()) {
+            Ok(x) => x,
+            Err(telebot::Error::Telegram(_, err_msg, _)) => {
+                let msg = format!("无法找到目标 Channel: {}", err_msg);
+                await!(bot.edit_message_text(chat_id, msg_id, msg).send())?;
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
+        };
+        if channel.kind != "channel" {
+            let msg = "目标需为 Channel".to_string();
+            await!(bot.edit_message_text(chat_id, msg_id, msg).send())?;
+            return Ok(None);
+        }
+        let channel_id = channel.id;
+
+        let admins_list = match await!(bot.get_chat_administrators(channel_id).send()) {
+            Ok((_, admins)) => admins
+                .iter()
+                .map(|member| member.user.id)
+                .collect::<Vec<i64>>(),
+            Err(telebot::Error::Telegram(_, err_msg, _)) => {
+                let msg = format!("请先将本 Bot 加入目标 Channel并设为管理员: {}", err_msg);
+                await!(bot.edit_message_text(chat_id, msg_id, msg).send())?;
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
+        };
+
+        if !admins_list.contains(&bot.inner.id) {
+            let msg = "请将本 Bot 设为管理员".to_string();
+            await!(bot.edit_message_text(chat_id, msg_id, msg).send())?;
+            return Ok(None);
+        }
+
+        if !admins_list.contains(&user_id) {
+            let msg = "该命令只能由 Channel 管理员使用".to_string();
+            await!(bot.edit_message_text(chat_id, msg_id, msg).send())?;
+            return Ok(None);
+        }
+
+        await!(bot.delete_message(chat_id, msg_id).send())?;
+
+        return Ok(Some(channel_id));
+    }
 }
