@@ -77,8 +77,7 @@ pub fn send_multiple_messages<'a>(
     messages: Vec<String>,
 ) -> impl Future<Item = (), Error = telebot::Error> + 'a {
     let bot = bot.clone();
-    let l = futures::stream::iter(messages.into_iter().map(Ok));
-    l.for_each(move |msg| {
+    futures::stream::iter_ok(messages).for_each(move |msg| {
         bot.message(target, msg)
             .parse_mode("HTML")
             .disable_web_page_preview(true)
