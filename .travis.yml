@@ -1,5 +1,8 @@
 language: rust
-sudo: required
+cache:
+  cargo: true
+  directories:
+    - "$TRAVIS_BUILD_DIR/target"
 os:
   - linux
   - osx
