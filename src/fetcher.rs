@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use telebot;
 use telebot::functions::*;
-use tokio_core::reactor::{Interval, Handle, Timeout};
+use tokio_core::reactor::{Interval, Timeout};
 use futures::prelude::*;
 use tokio_curl::Session;
 use regex::Regex;
@@ -13,20 +13,18 @@ use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
             to_chinese_error_msg, truncate_message, chat_is_unavailable, TELEGRAM_MAX_MSG_LEN};
 
-// 5 minute
-const FREQUENCY_SECOND: u64 = 300;
-
 lazy_static!{
     // it's different from `feed::HOST`, so maybe need a better name?
     static ref HOST: Regex = Regex::new(r"^(?:https?://)?([^/]+)").unwrap();
 }
 
-pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, handle: Handle) {
+pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, period: u64) {
+    let handle = bot.inner.handle.clone();
     let handle2 = handle.clone();
     let lop =
         async_block! {
         #[async]
-        for _ in Interval::new(Duration::from_secs(FREQUENCY_SECOND), &handle)
+        for _ in Interval::new(Duration::from_secs(period), &handle)
             .expect("failed to start feed loop")
             .map_err(|e| error!("feed loop error: {}", e))
         {

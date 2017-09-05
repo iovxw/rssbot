@@ -38,6 +38,14 @@ fn main() {
     }
     let datafile = &args[1];
     let token = &args[2];
+    let period = args.get(3)
+        .map(|s| {
+            s.parse().unwrap_or_else(|_| {
+                eprintln!("period must be unsigned");
+                std::process::exit(1);
+            })
+        })
+        .unwrap_or(300);
 
     let db = data::Database::open(datafile)
         .map_err(|e| {
@@ -62,7 +70,7 @@ fn main() {
 
     cmdhandles::register_commands(&bot, &db, lp.handle());
 
-    fetcher::spawn_fetcher(bot.clone(), db.clone(), lp.handle());
+    fetcher::spawn_fetcher(bot.clone(), db.clone(), period);
 
     checker::spawn_subscriber_alive_checker(bot.clone(), db, lp.handle());
 
