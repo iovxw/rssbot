@@ -36,8 +36,6 @@ pub fn spawn_subscriber_alive_checker(bot: telebot::RcBot, db: data::Database, h
                         {
                             db.delete_subscriber(subscriber)
                         }
-                    } else {
-                        continue
                     }
                 }
                 Ok(())

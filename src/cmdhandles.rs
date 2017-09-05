@@ -422,10 +422,10 @@ fn check_channel<'a>(
         });
     let bot = bot.clone();
     async_block! {
-        let (_, msg) = await!(bot.message(chat_id, "正在验证 Channel".to_string()).send())?;
+        let msg = await!(bot.message(chat_id, "正在验证 Channel".to_string()).send())?.1;
         let msg_id = msg.message_id;
-        let (_, channel) = match await!(bot.get_chat(channel).send()) {
-            Ok(x) => x,
+        let channel = match await!(bot.get_chat(channel).send()) {
+            Ok((_, channel)) => channel,
             Err(telebot::Error::Telegram(_, err_msg, _)) => {
                 let msg = format!("无法找到目标 Channel: {}", err_msg);
                 await!(bot.edit_message_text(chat_id, msg_id, msg).send())?;
