@@ -1,4 +1,5 @@
 language: rust
+sudo: true
 cache:
   cargo: true
 os:
@@ -8,7 +9,27 @@ rust:
   - nightly
 services:
   - docker
-before_deploy: "./tools/build-release rssbot ${TRAVIS_TAG}-${TRAVIS_OS_NAME}"
+before_deploy: |-
+  if [ $TRAVIS_OS_NAME = linux ]
+  then
+    sudo apt-get update && \
+    sudo apt-get install -y \
+         build-essential cmake curl file git musl-tools sudo xutils-dev && \
+    rustup target add x86_64-unknown-linux-musl && \
+    env VERS=1.0.2l && \
+    curl -O https://www.openssl.org/source/openssl-$VERS.tar.gz && \
+    tar xvzf openssl-$VERS.tar.gz && cd openssl-$VERS && \
+    env CC=musl-gcc ./config --prefix=./openssl && \
+    make && sudo make install && \
+    cd .. && rm -rf openssl-$VERS.tar.gz openssl-$VERS && \
+    env OPENSSL_DIR=./openssl/ \
+    OPENSSL_STATIC=1 \
+    cargo build --release --target x86_64-unknown-linux-musl && \
+    zip -j "rssbot-${TRAVIS_TAG}-${TRAVIS_OS_NAME}".zip target/x86_64-unknown-linux-musl/release/rssbot
+  else
+    cargo build --release && \
+    zip -j "rssbot-${TRAVIS_TAG}-${TRAVIS_OS_NAME}".zip target/release/rssbot
+  fi
 deploy:
   provider: releases
   api_key:
