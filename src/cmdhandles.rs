@@ -184,7 +184,7 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
             let session = Session::new(lphandle);
             let bot2 = bot.clone();
-            feed::fetch_feed(&session, feed_link.to_owned())
+            feed::fetch_feed(session, feed_link.to_owned())
                 .map(move |feed| (bot2, db, subscriber, feed_link, chat_id, feed))
                 .or_else(move |e| {
                     bot.message(

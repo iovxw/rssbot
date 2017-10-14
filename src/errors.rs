@@ -9,6 +9,10 @@ error_chain! {
             description("unexpected EOF")
         }
 
+        TooManyRedirects {
+            description("too many redirects")
+        }
+
         Http(code: u32) {
             description("unexpected HTTP response code")
             display("HTTP {} ({})", code, response_code(*code).unwrap_or("Unknown"))

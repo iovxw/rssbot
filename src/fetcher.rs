@@ -83,7 +83,7 @@ fn fetch_feed_updates<'a>(
     session: Session,
     feed: data::Feed,
 ) -> Result<(), ()> {
-    let rss = match await!(feed::fetch_feed(&session, feed.link.to_owned())) {
+    let rss = match await!(feed::fetch_feed(session, feed.link.to_owned())) {
         Ok(rss) => rss,
         Err(e) => {
             // 1440 * 5 minute = 5 days
@@ -121,6 +121,7 @@ fn fetch_feed_updates<'a>(
     let feed::RSS {
         title: rss_title,
         link: rss_link,
+        source: rss_source,
         items: rss_items,
     } = rss;
     let updates = db.update(&feed.link, rss_items);

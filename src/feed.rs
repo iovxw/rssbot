@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use curl::easy::Easy;
-use futures::Future;
+use futures::prelude::*;
 use tokio_curl::Session;
 use quick_xml::events::BytesStart;
 use quick_xml::events::Event as XmlEvent;
@@ -23,12 +23,19 @@ pub trait FromXml: Sized {
         -> Result<Self>;
 }
 
+enum AtomLink {
+    Alternate(String),
+    Source(String),
+    Other(String, String),
+}
+
 fn parse_atom_link<B: std::io::BufRead>(
     reader: &mut XmlReader<B>,
     attributes: Attributes,
-) -> Option<String> {
+) -> Option<AtomLink> {
     let mut link_tmp = None;
     let mut is_alternate = true;
+    let mut other_rel = None;
     for attribute in attributes {
         match attribute {
             Ok(attribute) => {
@@ -40,7 +47,11 @@ fn parse_atom_link<B: std::io::BufRead>(
                         }
                     }
                     "rel" => {
-                        is_alternate = reader.decode(attribute.value).as_ref() == "alternate";
+                        match reader.decode(attribute.value).as_ref() {
+                            "alternate" => is_alternate = true,
+                            "self" => is_alternate = false,
+                            other => other_rel = Some(other.to_owned()),
+                        }
                     }
                     _ => (),
                 }
@@ -48,7 +59,19 @@ fn parse_atom_link<B: std::io::BufRead>(
             Err(_) => continue,
         }
     }
-    if is_alternate { link_tmp } else { None }
+    if link_tmp.is_some() {
+        let link_tmp = link_tmp.unwrap();
+        let r = if other_rel.is_some() {
+            AtomLink::Other(link_tmp, other_rel.unwrap())
+        } else if is_alternate {
+            AtomLink::Alternate(link_tmp)
+        } else {
+            AtomLink::Source(link_tmp)
+        };
+        Some(r)
+    } else {
+        None
+    }
 }
 
 fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
@@ -103,6 +126,7 @@ impl FromXml for Option<String> {
 pub struct RSS {
     pub title: String,
     pub link: String,
+    pub source: Option<String>,
     pub items: Vec<Item>,
 }
 
@@ -116,9 +140,12 @@ impl FromXml for RSS {
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
-                    if reader.decode(e.name()).as_ref() == "link" {
-                        if let Some(link) = parse_atom_link(reader, e.attributes()) {
-                            rss.link = link;
+                    let name = reader.decode(e.name());
+                    if name == "link" || name == "atom:link" {
+                        match parse_atom_link(reader, e.attributes()) {
+                            Some(AtomLink::Alternate(link)) => rss.link = link,
+                            Some(AtomLink::Source(link)) => rss.source = Some(link),
+                            _ => {}
                         }
                     }
                 }
@@ -135,13 +162,17 @@ impl FromXml for RSS {
                                 rss.title = title;
                             }
                         }
-                        "link" => {
+                        "link" | "atom:link" => {
                             if let Some(link) = Option::from_xml(reader, e)? {
                                 // RSS
                                 rss.link = link;
-                            } else if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                            } else {
                                 // ATOM
-                                rss.link = link;
+                                match parse_atom_link(reader, e.attributes()) {
+                                    Some(AtomLink::Alternate(link)) => rss.link = link,
+                                    Some(AtomLink::Source(link)) => rss.source = Some(link),
+                                    _ => {}
+                                }
                             }
                         }
                         "item" | "entry" => {
@@ -179,7 +210,9 @@ impl FromXml for Item {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
                     if reader.decode(e.name()).as_ref() == "link" {
-                        if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                        if let Some(AtomLink::Alternate(link)) =
+                            parse_atom_link(reader, e.attributes())
+                        {
                             item.link = Some(link);
                         }
                     }
@@ -193,7 +226,9 @@ impl FromXml for Item {
                             if let Some(link) = Option::from_xml(reader, e)? {
                                 // RSS
                                 item.link = Some(link);
-                            } else if let Some(link) = parse_atom_link(reader, e.attributes()) {
+                            } else if let Some(AtomLink::Alternate(link)) =
+                                parse_atom_link(reader, e.attributes())
+                            {
                                 // ATOM
                                 item.link = Some(link);
                             }
@@ -271,43 +306,81 @@ fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     rss
 }
 
-pub fn fetch_feed<'a>(
-    session: &Session,
-    link: String,
-) -> impl Future<Item = RSS, Error = Error> + 'a {
-    let mut req = Easy::new();
-    let buf = Arc::new(Mutex::new(Vec::new()));
-    {
-        let buf = buf.clone();
-        req.get(true).unwrap();
-        req.url(&link).unwrap();
-        req.accept_encoding("").unwrap(); // accept all encoding
-        req.useragent(concat!(
-            env!("CARGO_PKG_NAME"),
-            "/",
-            env!("CARGO_PKG_VERSION"),
-            " (",
-            env!("CARGO_PKG_HOMEPAGE"),
-            ")"
-        )).unwrap();
-        req.follow_location(true).unwrap();
-        req.timeout(Duration::from_secs(10)).unwrap();
-        req.write_function(move |data| {
-            buf.lock().unwrap().extend_from_slice(data);
-            Ok(data.len())
-        }).unwrap();
+#[async]
+fn make_request(
+    session: Session,
+    mut source: String,
+    mut recur_limit: usize,
+) -> Result<(Vec<u8>, String, u32)> {
+    let mut location = None;
+    loop {
+        if recur_limit == 0 {
+            break Err(ErrorKind::TooManyRedirects.into());
+        }
+        let mut req = Easy::new();
+        let buf = Arc::new(Mutex::new(Vec::new()));
+        let location_buf = Arc::new(Mutex::new(String::new()));
+        {
+            let buf = buf.clone();
+            let location_buf = location_buf.clone();
+            req.get(true).unwrap();
+            req.url(&location.as_ref().unwrap_or(&source)).unwrap();
+            req.accept_encoding("").unwrap(); // accept all encoding
+            req.useragent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION"),
+                " (",
+                env!("CARGO_PKG_HOMEPAGE"),
+                ")"
+            )).unwrap();
+            req.timeout(Duration::from_secs(10)).unwrap();
+            req.write_function(move |data| {
+                buf.lock().unwrap().extend_from_slice(data);
+                Ok(data.len())
+            }).unwrap();
+            req.header_function(move |data| {
+                let header = String::from_utf8_lossy(data);
+                let mut header = header.splitn(2, ':');
+                if let (Some(k), Some(v)) = (header.next(), header.next()) {
+                    if k == "Location" || k.to_lowercase() == "location" {
+                        location_buf.lock().unwrap().push_str(v.trim());
+                    }
+                }
+                true
+            }).unwrap();
+        }
+        let mut resp = await!(session.perform(req))?;
+        let response_code = resp.response_code().unwrap();
+        ::std::mem::drop(resp); // make `buf` and `location_buf` strong count to zero
+        if response_code == 301 {
+            source = Arc::try_unwrap(location_buf).unwrap().into_inner().unwrap();
+            location = None;
+            recur_limit -= 1;
+        } else if response_code == 302 {
+            location = Some(Arc::try_unwrap(location_buf).unwrap().into_inner().unwrap());
+            recur_limit -= 1;
+        } else {
+            let body = Arc::try_unwrap(buf).unwrap().into_inner().unwrap();
+            break Ok((body, source, response_code));
+        }
     }
-    session.perform(req).map_err(|e| e.into()).and_then(
-        move |mut resp| {
-            let response_code = resp.response_code().unwrap();
-            if response_code != 200 {
-                return Err(ErrorKind::Http(response_code).into());
-            }
-            let buf = buf.lock().unwrap();
-            let rss = parse(buf.as_slice())?;
-            Ok(fix_relative_url(rss, &link))
-        },
-    )
+}
+
+pub fn fetch_feed<'a>(
+    session: Session,
+    source: String,
+) -> impl Future<Item = RSS, Error = Error> + 'a {
+    make_request(session, source, 10).and_then(move |(body, source, response_code)| {
+        if response_code != 200 {
+            return Err(ErrorKind::Http(response_code).into());
+        }
+        let mut rss = parse(body.as_slice())?;
+        if rss.source.is_none() {
+            rss.source = Some(source.clone());
+        }
+        Ok(fix_relative_url(rss, &source))
+    })
 }
 
 #[test]
