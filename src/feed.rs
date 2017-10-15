@@ -376,6 +376,11 @@ pub fn fetch_feed<'a>(
             return Err(ErrorKind::Http(response_code).into());
         }
         let mut rss = parse(body.as_slice())?;
+        if rss == RSS::default() {
+            return Err(ErrorKind::EmptyFeed.into());
+        }
+        // TODO: check and fix schema in url, e.g. http://
+        // `HOST` should also modified
         if rss.source.is_none() {
             rss.source = Some(source.clone());
         }

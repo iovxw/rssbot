@@ -13,6 +13,10 @@ error_chain! {
             description("too many redirects")
         }
 
+        EmptyFeed {
+            description("feed is empty or not valid")
+        }
+
         Http(code: u32) {
             description("unexpected HTTP response code")
             display("HTTP {} ({})", code, response_code(*code).unwrap_or("Unknown"))
