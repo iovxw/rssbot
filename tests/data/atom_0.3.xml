@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed version="0.3" 
+      xmlns="http://purl.org/atom/ns#" >
+  <title>atom_0.3.feed.title</title>
+  <link rel="alternate" type="atom_0.3.feed.link^type" href="atom_0.3.feed.link^href"/>
+  <author>
+    <name>atom_0.3.feed.author.name</name>
+    <url>atom_0.3.feed.author.url</url>
+    <email>atom_0.3.feed.author.email</email>
+  </author>
+  <contributor>
+    <name>atom_0.3.feed.contributor.name</name>
+    <url>atom_0.3.feed.contributor.url</url>
+    <email>atom_0.3.feed.contributor.email</email>
+  </contributor>
+  <tagline type="atom_0.3.feed.tagline^type" mode="xml">atom_0.3.feed.tagline</tagline>
+  <id>atom_0.3.feed.id</id>
+  <generator url="atom_0.3.feed.generator^url">atom_0.3.feed.generator</generator>
+  <copyright>atom_0.3.feed.copyright</copyright>
+  <info type="atom_0.3.feed.info^type" mode="xml">atom_0.3.feed.info</info>
+  <modified>2000-01-01T00:00:00Z</modified>
+  <entry>
+    <title>atom_0.3.feed.entry[0].title</title>
+    <link rel="alternate" type="atom_0.3.feed.entry[0].link^type"
+          href="atom_0.3.feed.entry[0].link^href"/>
+    <id>atom_0.3.feed.entry[0]^id</id>
+    <author>
+      <name>atom_0.3.feed.entry[0].author.name</name>
+      <url>atom_0.3.feed.entry[0].author.url</url>
+      <email>atom_0.3.feed.entry[0].author.email</email>
+    </author>
+    <contributor>
+      <name>atom_0.3.feed.entry[0].contributor.name</name>
+      <url>atom_0.3.feed.entry[0].contributor.url</url>
+      <email>atom_0.3.feed.entry[0].contributor.email</email>
+    </contributor>
+    <modified>2000-01-01T00:00:00Z</modified>
+    <issued>2000-01-01T01:00:00Z</issued>
+    <created>2000-01-01T02:00:00Z</created>
+    <summary type="atom_0.3.feed.entry[0].summary^type" mode="xml">atom_0.3.feed.entry[0].summary</summary>
+    <content type="atom_0.3.feed.entry[0].content[0]^type" mode="xml">atom_0.3.feed.entry[0].content[0]</content>
+    <content type="atom_0.3.feed.entry[0].content[1]^type" mode="xml">atom_0.3.feed.entry[0].content[1]</content>
+  </entry>
+    <entry>
+      <title>atom_0.3.feed.entry[1].title</title>
+      <link rel="alternate" type="atom_0.3.feed.entry[1].link^type"
+            href="atom_0.3.feed.entry[1].link^href"/>
+      <id>atom_0.3.feed.entry[1]^id</id>
+      <author>
+        <name>atom_0.3.feed.entry[1].author.name</name>
+        <url>atom_0.3.feed.entry[1].author.url</url>
+        <email>atom_0.3.feed.entry[1].author.email</email>
+      </author>
+      <contributor>
+        <name>atom_0.3.feed.entry[1].contributor.name</name>
+        <url>atom_0.3.feed.entry[1].contributor.url</url>
+        <email>atom_0.3.feed.entry[1].contributor.email</email>
+      </contributor>
+      <modified>2000-02-01T00:00:00Z</modified>
+      <issued>2000-02-01T01:00:00Z</issued>
+      <created>2000-02-01T02:00:00Z</created>
+      <summary type="atom_0.3.feed.entry[1].summary^type" mode="xml">atom_0.3.feed.entry[1].summary</summary>
+      <content type="atom_0.3.feed.entry[1].content[0]^type" mode="xml">atom_0.3.feed.entry[1].content[0]</content>
+      <content type="atom_0.3.feed.entry[1].content[1]^type" mode="xml">atom_0.3.feed.entry[1].content[1]</content>
+    </entry>
+</feed>

@@ -152,7 +152,7 @@ impl FromXml for RSS {
                 Ok(XmlEvent::Start(ref e)) => {
                     match reader.decode(e.name()).as_ref() {
                         "channel" => {
-                            // RDF
+                            // RSS 0.9 1.0
                             let rdf = RSS::from_xml(reader, e)?;
                             rss.title = rdf.title;
                             rss.link = rdf.link;
@@ -403,5 +403,248 @@ fn test_host_regex() {
     assert_eq!(
         &HOST.captures("https://example.com/path").unwrap()[0],
         "https://example.com"
+    );
+}
+
+#[test]
+fn test_atom03() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/atom_0.3.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "atom_0.3.feed.title".into(),
+            link: "atom_0.3.feed.link^href".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("atom_0.3.feed.entry[0].title".into()),
+                    link: Some("atom_0.3.feed.entry[0].link^href".into()),
+                    id: Some("atom_0.3.feed.entry[0]^id".into()),
+                },
+                Item {
+                    title: Some("atom_0.3.feed.entry[1].title".into()),
+                    link: Some("atom_0.3.feed.entry[1].link^href".into()),
+                    id: Some("atom_0.3.feed.entry[1]^id".into()),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_atom10() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/atom_1.0.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "atom_1.0.feed.title".into(),
+            link: "http://example.com/blog_plain".into(),
+            source: Some("http://example.com/blog/atom_1.0.xml".into()),
+            items: vec![
+                Item {
+                    title: Some("atom_1.0.feed.entry[0].title".into()),
+                    link: Some("http://example.com/blog/entry1_plain".into()),
+                    id: Some("atom_1.0.feed.entry[0]^id".into()),
+                },
+                Item {
+                    title: Some("atom_1.0.feed.entry[1].title".into()),
+                    link: Some("http://example.com/blog/entry2".into()),
+                    id: Some("atom_1.0.feed.entry[1]^id".into()),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss09() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_0.9.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_0.9.channel.title".into(),
+            link: "rss_0.9.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_0.9.item[0].title".into()),
+                    link: Some("rss_0.9.item[0].link".into()),
+                    id: None,
+                },
+                Item {
+                    title: Some("rss_0.9.item[1].title".into()),
+                    link: Some("rss_0.9.item[1].link".into()),
+                    id: None,
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss091() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_0.91.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_0.91.channel.title".into(),
+            link: "rss_0.91.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_0.91.channel.item[0].title".into()),
+                    link: Some("rss_0.91.channel.item[0].link".into()),
+                    id: None,
+                },
+                Item {
+                    title: Some("rss_0.91.channel.item[1].title".into()),
+                    link: Some("rss_0.91.channel.item[1].link".into()),
+                    id: None,
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss092() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_0.92.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_0.92.channel.title".into(),
+            link: "rss_0.92.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_0.92.channel.item[0].title".into()),
+                    link: Some("rss_0.92.channel.item[0].link".into()),
+                    id: None,
+                },
+                Item {
+                    title: Some("rss_0.92.channel.item[1].title".into()),
+                    link: Some("rss_0.92.channel.item[1].link".into()),
+                    id: None,
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss093() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_0.93.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_0.93.channel.title".into(),
+            link: "rss_0.93.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_0.93.channel.item[0].title".into()),
+                    link: Some("rss_0.93.channel.item[0].link".into()),
+                    id: None,
+                },
+                Item {
+                    title: Some("rss_0.93.channel.item[1].title".into()),
+                    link: Some("rss_0.93.channel.item[1].link".into()),
+                    id: None,
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss094() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_0.94.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_0.94.channel.title".into(),
+            link: "rss_0.94.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_0.94.channel.item[0].title".into()),
+                    link: Some("rss_0.94.channel.item[0].link".into()),
+                    id: Some("rss_0.94.channel.item[0].guid".into()),
+                },
+                Item {
+                    title: Some("rss_0.94.channel.item[1].title".into()),
+                    link: Some("rss_0.94.channel.item[1].link".into()),
+                    id: Some("rss_0.94.channel.item[1].guid".into()),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss10() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_1.0.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_1.0.channel.title".into(),
+            link: "rss_1.0.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_1.0.item[0].title".into()),
+                    link: Some("rss_1.0.item[0].link".into()),
+                    id: None,
+                },
+                Item {
+                    title: Some("rss_1.0.item[1].title".into()),
+                    link: Some("rss_1.0.item[1].link".into()),
+                    id: None,
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn test_rss20() {
+    use std::io::Cursor;
+    let s = include_str!("../tests/data/rss_2.0.xml");
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(
+        r,
+        RSS {
+            title: "rss_2.0.channel.title".into(),
+            link: "rss_2.0.channel.link".into(),
+            source: None,
+            items: vec![
+                Item {
+                    title: Some("rss_2.0.channel.item[0].title".into()),
+                    link: Some("rss_2.0.channel.item[0].link".into()),
+                    id: Some("rss_2.0.channel.item[0].guid".into()),
+                },
+                Item {
+                    title: Some("rss_2.0.channel.item[1].title".into()),
+                    link: Some("rss_2.0.channel.item[1].link".into()),
+                    id: Some("rss_2.0.channel.item[1].guid".into()),
+                },
+            ],
+        }
     );
 }
