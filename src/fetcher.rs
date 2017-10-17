@@ -115,13 +115,18 @@ fn fetch_feed_updates<'a>(
             return Ok(());
         }
     };
+    let moved = if rss.source.as_ref().unwrap() != &feed.link {
+        Some(rss.clone())
+    } else {
+        None
+    };
     if rss.title != feed.title {
         db.update_title(&feed.link, &rss.title);
     }
     let feed::RSS {
         title: rss_title,
         link: rss_link,
-        source: rss_source,
+        source: _,
         items: rss_items,
     } = rss;
     let updates = db.update(&feed.link, rss_items);
@@ -157,6 +162,11 @@ fn fetch_feed_updates<'a>(
             } else {
                 warn!("failed to send updates to {}, {:?}", subscriber, e);
             }
+        }
+        if let &Some(ref rss) = &moved {
+            // ignore error
+            let _ = db.unsubscribe(subscriber, &feed.link);
+            let _ = db.subscribe(subscriber, rss.source.as_ref().unwrap(), rss);
         }
     }
     Ok(())

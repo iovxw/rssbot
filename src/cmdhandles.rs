@@ -6,7 +6,7 @@ use tokio_curl::Session;
 use telebot;
 use pinyin_order;
 
-use errors;
+use errors::*;
 use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
             to_chinese_error_msg, log_error};
@@ -184,8 +184,8 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
             let session = Session::new(lphandle);
             let bot2 = bot.clone();
-            feed::fetch_feed(session, feed_link.to_owned())
-                .map(move |feed| (bot2, db, subscriber, feed_link, chat_id, feed))
+            feed::fetch_feed(session, feed_link)
+                .map(move |feed| (bot2, db, subscriber, chat_id, feed))
                 .or_else(move |e| {
                     bot.message(
                         chat_id,
@@ -197,8 +197,8 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                         })
                 })
         })
-        .and_then(|(bot, db, subscriber, feed_link, chat_id, feed)| {
-            match db.subscribe(subscriber, &feed_link, &feed) {
+        .and_then(|(bot, db, subscriber, chat_id, feed)| {
+            match db.subscribe(subscriber, &feed.source.as_ref().unwrap(), &feed) {
                 Ok(_) => {
                     bot.message(
                         chat_id,
@@ -209,6 +209,10 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                         ),
                     ).parse_mode("HTML")
                         .disable_web_page_preview(true)
+                        .send()
+                }
+                Err(Error(ErrorKind::AlreadySubscribed, _)) => {
+                    bot.message(chat_id, "已订阅过的 RSS".to_string())
                         .send()
                 }
                 Err(e) => {
@@ -286,7 +290,7 @@ fn register_unsub(bot: &telebot::RcBot, db: Database) {
                         .disable_web_page_preview(true)
                         .send()
                 }
-                Err(errors::Error(errors::ErrorKind::NotSubscribed, _)) => {
+                Err(Error(ErrorKind::NotSubscribed, _)) => {
                     bot.message(chat_id, "未订阅过的 RSS".to_string())
                         .send()
                 }

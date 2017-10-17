@@ -14,10 +14,6 @@ use regex::Regex;
 
 use errors::*;
 
-lazy_static! {
-    static ref HOST: Regex = Regex::new(r"^((?:https?://)?[^/]+)").unwrap();
-}
-
 pub trait FromXml: Sized {
     fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, start: &BytesStart)
         -> Result<Self>;
@@ -290,6 +286,9 @@ fn set_url_relative_to_absolute(link: &mut String, host: &str) {
 }
 
 fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
+    lazy_static! {
+        static ref HOST: Regex = Regex::new(r"^(https?://[^/]+)").unwrap();
+    }
     let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| {
         r.get(0).unwrap().as_str()
     });
@@ -371,7 +370,7 @@ pub fn fetch_feed<'a>(
     session: Session,
     source: String,
 ) -> impl Future<Item = RSS, Error = Error> + 'a {
-    make_request(session, source, 10).and_then(move |(body, source, response_code)| {
+    make_request(session, source, 10).and_then(move |(body, mut source, response_code)| {
         if response_code != 200 {
             return Err(ErrorKind::Http(response_code).into());
         }
@@ -379,31 +378,14 @@ pub fn fetch_feed<'a>(
         if rss == RSS::default() {
             return Err(ErrorKind::EmptyFeed.into());
         }
-        // TODO: check and fix schema in url, e.g. http://
-        // `HOST` should also modified
+        if !source.starts_with("http://") && !source.starts_with("https://") {
+            source.insert_str(0, "http://");
+        }
         if rss.source.is_none() {
             rss.source = Some(source.clone());
         }
         Ok(fix_relative_url(rss, &source))
     })
-}
-
-#[test]
-fn test_host_regex() {
-    assert!(HOST.captures("").is_none());
-    assert!(HOST.captures("/path").is_none());
-    assert_eq!(
-        &HOST.captures("example.com/path").unwrap()[0],
-        "example.com"
-    );
-    assert_eq!(
-        &HOST.captures("http://example.com/path").unwrap()[0],
-        "http://example.com"
-    );
-    assert_eq!(
-        &HOST.captures("https://example.com/path").unwrap()[0],
-        "https://example.com"
-    );
 }
 
 #[test]
