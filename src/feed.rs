@@ -389,24 +389,6 @@ pub fn fetch_feed<'a>(
 }
 
 #[test]
-fn test_host_regex() {
-    assert!(HOST.captures("").is_none());
-    assert!(HOST.captures("/path").is_none());
-    assert_eq!(
-        &HOST.captures("example.com/path").unwrap()[0],
-        "example.com"
-    );
-    assert_eq!(
-        &HOST.captures("http://example.com/path").unwrap()[0],
-        "http://example.com"
-    );
-    assert_eq!(
-        &HOST.captures("https://example.com/path").unwrap()[0],
-        "https://example.com"
-    );
-}
-
-#[test]
 fn test_atom03() {
     use std::io::Cursor;
     let s = include_str!("../tests/data/atom_0.3.xml");
