@@ -2,16 +2,16 @@
 
 中文 Telegram RSS 机器人 [@RustRssBot](http://t.me/RustRssBot)
 
-### 支持:
- - RSS 0.9
- - RSS 0.91
- - RSS 0.92
- - RSS 0.93
- - RSS 0.94
- - RSS 1.0
- - RSS 2.0
- - Atom 0.3
- - Atom 1.0
+**支持:**
+ - [x] RSS 0.9
+ - [x] RSS 0.91
+ - [x] RSS 0.92
+ - [x] RSS 0.93
+ - [x] RSS 0.94
+ - [x] RSS 1.0
+ - [x] RSS 2.0
+ - [x] Atom 0.3
+ - [x] Atom 1.0
 
 ## 使用
 
@@ -19,7 +19,7 @@
     /sub       - 订阅一个 RSS: /sub http://example.com/feed.xml
     /unsub     - 退订一个 RSS: /unsub http://example.com/feed.xml
     /unsubthis - 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel
-    
+
 ## 下载
 
 可直接从 [Releases](https://github.com/iovxw/rssbot/releases) 下载预编译的程序, Linux 版本为 *musl* 静态链接, 无需其他依赖
