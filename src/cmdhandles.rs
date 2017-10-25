@@ -9,7 +9,7 @@ use pinyin_order;
 use errors::*;
 use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
-            to_chinese_error_msg, log_error};
+            to_chinese_error_msg, log_error, gen_ua};
 use data::Database;
 
 pub fn register_commands(bot: &telebot::RcBot, db: &Database, lphandle: Handle) {
@@ -184,7 +184,7 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
             let session = Session::new(lphandle);
             let bot2 = bot.clone();
-            feed::fetch_feed(session, feed_link)
+            feed::fetch_feed(session, gen_ua(&bot), feed_link)
                 .map(move |feed| (bot2, db, subscriber, chat_id, feed))
                 .or_else(move |e| {
                     bot.message(

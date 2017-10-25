@@ -145,3 +145,15 @@ pub fn log_error(e: &errors::Error) {
         warn!("backtrace: {:?}", backtrace);
     }
 }
+
+pub fn gen_ua(bot: &telebot::RcBot) -> String {
+    format!(
+        concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION"),
+            " (+https://t.me/{})"
+        ),
+        bot.inner.username
+    )
+}

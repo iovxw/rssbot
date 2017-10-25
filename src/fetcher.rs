@@ -11,7 +11,8 @@ use regex::Regex;
 use data;
 use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
-            to_chinese_error_msg, truncate_message, chat_is_unavailable, TELEGRAM_MAX_MSG_LEN};
+            to_chinese_error_msg, truncate_message, chat_is_unavailable, gen_ua,
+            TELEGRAM_MAX_MSG_LEN};
 
 lazy_static!{
     // it's different from `feed::HOST`, so maybe need a better name?
@@ -83,7 +84,11 @@ fn fetch_feed_updates<'a>(
     session: Session,
     feed: data::Feed,
 ) -> Result<(), ()> {
-    let rss = match await!(feed::fetch_feed(session, feed.link.to_owned())) {
+    let rss = match await!(feed::fetch_feed(
+        session,
+        gen_ua(&bot),
+        feed.link.to_owned(),
+    )) {
         Ok(rss) => rss,
         Err(e) => {
             // 1440 * 5 minute = 5 days

@@ -309,6 +309,7 @@ fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
 fn make_request(
     session: Session,
     mut source: String,
+    ua: String,
     mut recur_limit: usize,
 ) -> Result<(Vec<u8>, String, u32)> {
     let mut location = None;
@@ -325,14 +326,7 @@ fn make_request(
             req.get(true).unwrap();
             req.url(&location.as_ref().unwrap_or(&source)).unwrap();
             req.accept_encoding("").unwrap(); // accept all encoding
-            req.useragent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION"),
-                " (",
-                env!("CARGO_PKG_HOMEPAGE"),
-                ")"
-            )).unwrap();
+            req.useragent(&ua).unwrap();
             req.timeout(Duration::from_secs(10)).unwrap();
             req.write_function(move |data| {
                 buf.lock().unwrap().extend_from_slice(data);
@@ -368,9 +362,10 @@ fn make_request(
 
 pub fn fetch_feed<'a>(
     session: Session,
+    ua: String,
     source: String,
 ) -> impl Future<Item = RSS, Error = Error> + 'a {
-    make_request(session, source, 10).and_then(move |(body, mut source, response_code)| {
+    make_request(session, source, ua, 10).and_then(move |(body, mut source, response_code)| {
         if response_code != 200 {
             return Err(ErrorKind::Http(response_code).into());
         }
