@@ -83,7 +83,16 @@ fn fetch_feed_updates<'a>(
     session: Session,
     feed: data::Feed,
 ) -> Result<(), ()> {
-    let rss = match await!(feed::fetch_feed(session, feed.link.to_owned())) {
+    let ua = format!(
+        concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION"),
+            " (+https://t.me/{})"
+        ),
+        bot.inner.username
+    );
+    let rss = match await!(feed::fetch_feed(session, ua, feed.link.to_owned())) {
         Ok(rss) => rss,
         Err(e) => {
             // 1440 * 5 minute = 5 days
