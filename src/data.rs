@@ -219,7 +219,7 @@ pub struct Database {
 
 impl Clone for Database {
     fn clone(&self) -> Database {
-        Database { inner: self.inner.clone() }
+        Database { inner: Rc::clone(&self.inner) }
     }
 }
 

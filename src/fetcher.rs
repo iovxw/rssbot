@@ -78,7 +78,7 @@ fn get_host(url: &str) -> &str {
 }
 
 #[async]
-fn fetch_feed_updates<'a>(
+fn fetch_feed_updates(
     bot: telebot::RcBot,
     db: data::Database,
     session: Session,
@@ -131,8 +131,8 @@ fn fetch_feed_updates<'a>(
     let feed::RSS {
         title: rss_title,
         link: rss_link,
-        source: _,
         items: rss_items,
+        ..
     } = rss;
     let updates = db.update(&feed.link, rss_items);
     if updates.is_empty() {
@@ -168,7 +168,7 @@ fn fetch_feed_updates<'a>(
                 warn!("failed to send updates to {}, {:?}", subscriber, e);
             }
         }
-        if let &Some(ref rss) = &moved {
+        if let Some(ref rss) = moved {
             // ignore error
             let _ = db.unsubscribe(subscriber, &feed.link);
             let _ = db.subscribe(subscriber, rss.source.as_ref().unwrap(), rss);

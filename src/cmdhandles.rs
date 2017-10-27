@@ -198,7 +198,7 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                 })
         })
         .and_then(|(bot, db, subscriber, chat_id, feed)| {
-            match db.subscribe(subscriber, &feed.source.as_ref().unwrap(), &feed) {
+            match db.subscribe(subscriber, feed.source.as_ref().unwrap(), &feed) {
                 Ok(_) => {
                     bot.message(
                         chat_id,
@@ -471,6 +471,6 @@ fn check_channel<'a>(
 
         await!(bot.delete_message(chat_id, msg_id).send())?;
 
-        return Ok(Some(channel_id));
+        Ok(Some(channel_id))
     }
 }

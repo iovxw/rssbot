@@ -312,7 +312,7 @@ fn make_request(
     ua: String,
     mut recur_limit: usize,
 ) -> Result<(Vec<u8>, String, u32)> {
-    let mut location = None;
+    let mut location: Option<String> = None;
     loop {
         if recur_limit == 0 {
             break Err(ErrorKind::TooManyRedirects.into());
@@ -321,10 +321,10 @@ fn make_request(
         let buf = Arc::new(Mutex::new(Vec::new()));
         let location_buf = Arc::new(Mutex::new(String::new()));
         {
-            let buf = buf.clone();
-            let location_buf = location_buf.clone();
+            let buf = Arc::clone(&buf);
+            let location_buf = Arc::clone(&location_buf);
             req.get(true).unwrap();
-            req.url(&location.as_ref().unwrap_or(&source)).unwrap();
+            req.url(location.as_ref().unwrap_or(&source)).unwrap();
             req.accept_encoding("").unwrap(); // accept all encoding
             req.useragent(&ua).unwrap();
             req.timeout(Duration::from_secs(10)).unwrap();
