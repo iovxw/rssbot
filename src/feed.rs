@@ -20,50 +20,38 @@ pub trait FromXml: Sized {
         -> Result<Self>;
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum AtomLink<'a> {
     Alternate(String),
     Source(String),
+    Hub(String),
     Other(String, Cow<'a, str>),
 }
 
 fn parse_atom_link<'a, B: std::io::BufRead>(
     reader: &mut XmlReader<B>,
     attributes: Attributes<'a>,
-) -> Option<AtomLink<'a>> {
-    let mut link_tmp = None;
-    let mut is_alternate = true;
-    let mut other_rel = None;
+) -> Result<Option<AtomLink<'a>>> {
+    let mut href = None;
+    let mut rel = None;
     for attribute in attributes {
-        match attribute {
-            Ok(attribute) => {
-                match reader.decode(attribute.key).as_ref() {
-                    "href" => {
-                        match attribute.unescape_and_decode_value(reader) {
-                            Ok(link) => link_tmp = Some(link),
-                            Err(_) => continue,
-                        }
-                    }
-                    "rel" => {
-                        let v = reader.decode(attribute.value);
-                        match v.as_ref() {
-                            "alternate" => is_alternate = true,
-                            "self" => is_alternate = false,
-                            _ => other_rel = Some(v),
-                        }
-                    }
-                    _ => (),
-                }
-            }
-            Err(_) => continue,
+        let attribute = attribute?;
+        match reader.decode(attribute.key).as_ref() {
+            "href" => href = Some(attribute.unescape_and_decode_value(reader)?),
+            "rel" => rel = Some(reader.decode(attribute.value)),
+            _ => (),
         }
     }
-    link_tmp.map(|link_tmp| if other_rel.is_some() {
-        AtomLink::Other(link_tmp, other_rel.unwrap())
-    } else if is_alternate {
-        AtomLink::Alternate(link_tmp)
+    Ok(href.map(move |href| if let Some(rel) = rel {
+        match &*rel {
+            "alternate" => AtomLink::Alternate(href),
+            "self" => AtomLink::Source(href),
+            "hub" => AtomLink::Hub(href),
+            _ => AtomLink::Other(href, rel),
+        }
     } else {
-        AtomLink::Source(link_tmp)
-    })
+        AtomLink::Alternate(href)
+    }))
 }
 
 fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
@@ -128,7 +116,7 @@ impl FromXml for RSS {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
                     if reader.decode(e.local_name()) == "link" {
-                        match parse_atom_link(reader, e.attributes()) {
+                        match parse_atom_link(reader, e.attributes())? {
                             Some(AtomLink::Alternate(link)) => rss.link = link,
                             Some(AtomLink::Source(link)) => rss.source = Some(link),
                             _ => {}
@@ -154,7 +142,7 @@ impl FromXml for RSS {
                                 rss.link = link;
                             } else {
                                 // ATOM
-                                match parse_atom_link(reader, e.attributes()) {
+                                match parse_atom_link(reader, e.attributes())? {
                                     Some(AtomLink::Alternate(link)) => rss.link = link,
                                     Some(AtomLink::Source(link)) => rss.source = Some(link),
                                     _ => {}
@@ -197,7 +185,7 @@ impl FromXml for Item {
                 Ok(XmlEvent::Empty(ref e)) => {
                     if reader.decode(e.name()).as_ref() == "link" {
                         if let Some(AtomLink::Alternate(link)) =
-                            parse_atom_link(reader, e.attributes())
+                            parse_atom_link(reader, e.attributes())?
                         {
                             item.link = Some(link);
                         }
@@ -213,7 +201,7 @@ impl FromXml for Item {
                                 // RSS
                                 item.link = Some(link);
                             } else if let Some(AtomLink::Alternate(link)) =
-                                parse_atom_link(reader, e.attributes())
+                                parse_atom_link(reader, e.attributes())?
                             {
                                 // ATOM
                                 item.link = Some(link);
@@ -630,4 +618,36 @@ fn test_rss_with_atom_ns() {
 </rss>"#;
     let r = parse(Cursor::new(s)).unwrap();
     assert_eq!(r.source, Some("self link".into()));
+}
+
+#[test]
+fn test_parse_atom_link() {
+    use std::io::Cursor;
+    let data = vec![
+        r#"<link href="alternate href" />"#,
+        r#"<link href="alternate href" rel="alternate" />"#,
+        r#"<link href="self href" rel="self" />"#,
+        r#"<link href="hub href" rel="hub" />"#,
+        r#"<link href="other href" rel="other" />"#,
+        r#"<link />"#,
+    ];
+    let results = vec![
+        Some(AtomLink::Alternate("alternate href".into())),
+        Some(AtomLink::Alternate("alternate href".into())),
+        Some(AtomLink::Source("self href".into())),
+        Some(AtomLink::Hub("hub href".into())),
+        Some(AtomLink::Other(
+            "other href".into(),
+            Cow::Owned("other".into()),
+        )),
+        None,
+    ];
+    for (data, result) in data.iter().zip(results) {
+        let mut reader = XmlReader::from_reader(Cursor::new(data));
+        let mut buf = Vec::new();
+        if let XmlEvent::Empty(e) = reader.read_event(&mut buf).unwrap() {
+            let r = parse_atom_link(&mut reader, e.attributes()).unwrap();
+            assert_eq!(r, result);
+        }
+    }
 }
