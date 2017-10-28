@@ -2,6 +2,7 @@ use std;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::borrow::Cow;
 
 use curl::easy::Easy;
 use futures::prelude::*;
@@ -19,16 +20,16 @@ pub trait FromXml: Sized {
         -> Result<Self>;
 }
 
-enum AtomLink {
+enum AtomLink<'a> {
     Alternate(String),
     Source(String),
-    Other(String, String),
+    Other(String, Cow<'a, str>),
 }
 
-fn parse_atom_link<B: std::io::BufRead>(
+fn parse_atom_link<'a, B: std::io::BufRead>(
     reader: &mut XmlReader<B>,
-    attributes: Attributes,
-) -> Option<AtomLink> {
+    attributes: Attributes<'a>,
+) -> Option<AtomLink<'a>> {
     let mut link_tmp = None;
     let mut is_alternate = true;
     let mut other_rel = None;
@@ -43,10 +44,11 @@ fn parse_atom_link<B: std::io::BufRead>(
                         }
                     }
                     "rel" => {
-                        match reader.decode(attribute.value).as_ref() {
+                        let v = reader.decode(attribute.value);
+                        match v.as_ref() {
                             "alternate" => is_alternate = true,
                             "self" => is_alternate = false,
-                            other => other_rel = Some(other.to_owned()),
+                            _ => other_rel = Some(v),
                         }
                     }
                     _ => (),
@@ -55,19 +57,13 @@ fn parse_atom_link<B: std::io::BufRead>(
             Err(_) => continue,
         }
     }
-    if link_tmp.is_some() {
-        let link_tmp = link_tmp.unwrap();
-        let r = if other_rel.is_some() {
-            AtomLink::Other(link_tmp, other_rel.unwrap())
-        } else if is_alternate {
-            AtomLink::Alternate(link_tmp)
-        } else {
-            AtomLink::Source(link_tmp)
-        };
-        Some(r)
+    link_tmp.map(|link_tmp| if other_rel.is_some() {
+        AtomLink::Other(link_tmp, other_rel.unwrap())
+    } else if is_alternate {
+        AtomLink::Alternate(link_tmp)
     } else {
-        None
-    }
+        AtomLink::Source(link_tmp)
+    })
 }
 
 fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
@@ -365,6 +361,9 @@ pub fn fetch_feed<'a>(
     ua: String,
     source: String,
 ) -> impl Future<Item = RSS, Error = Error> + 'a {
+    fn is_vaild_link(link: &str) -> bool {
+        link.starts_with("http://") || link.starts_with("https://")
+    };
     make_request(session, source, ua, 10).and_then(move |(body, mut source, response_code)| {
         if response_code != 200 {
             return Err(ErrorKind::Http(response_code).into());
@@ -373,10 +372,10 @@ pub fn fetch_feed<'a>(
         if rss == RSS::default() {
             return Err(ErrorKind::EmptyFeed.into());
         }
-        if !source.starts_with("http://") && !source.starts_with("https://") {
+        if !is_vaild_link(&source) {
             source.insert_str(0, "http://");
         }
-        if rss.source.is_none() {
+        if rss.source.is_none() || !is_vaild_link(rss.source.as_ref().unwrap()) {
             rss.source = Some(source.clone());
         }
         Ok(fix_relative_url(rss, &source))
