@@ -127,8 +127,7 @@ impl FromXml for RSS {
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
-                    let name = reader.decode(e.name());
-                    if name == "link" || name == "atom:link" {
+                    if reader.decode(e.local_name()) == "link" {
                         match parse_atom_link(reader, e.attributes()) {
                             Some(AtomLink::Alternate(link)) => rss.link = link,
                             Some(AtomLink::Source(link)) => rss.source = Some(link),
@@ -137,7 +136,7 @@ impl FromXml for RSS {
                     }
                 }
                 Ok(XmlEvent::Start(ref e)) => {
-                    match reader.decode(e.name()).as_ref() {
+                    match reader.decode(e.local_name()).as_ref() {
                         "channel" => {
                             // RSS 0.9 1.0
                             let rdf = RSS::from_xml(reader, e)?;
@@ -149,7 +148,7 @@ impl FromXml for RSS {
                                 rss.title = title;
                             }
                         }
-                        "link" | "atom:link" => {
+                        "link" => {
                             if let Some(link) = try_parse_text(reader)? {
                                 // RSS
                                 rss.link = link;
@@ -618,4 +617,17 @@ fn test_rss20() {
             ],
         }
     );
+}
+
+#[test]
+fn test_rss_with_atom_ns() {
+    use std::io::Cursor;
+    let s = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+<atom:link href="self link" rel="self" />
+</channel>
+</rss>"#;
+    let r = parse(Cursor::new(s)).unwrap();
+    assert_eq!(r.source, Some("self link".into()));
 }
