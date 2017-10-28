@@ -83,35 +83,30 @@ fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
     Ok(())
 }
 
-impl FromXml for Option<String> {
-    fn from_xml<B: std::io::BufRead>(
-        reader: &mut XmlReader<B>,
-        _start: &BytesStart,
-    ) -> Result<Self> {
-        let mut buf = Vec::new();
-        let mut content: Option<String> = None;
-        loop {
-            match reader.read_event(&mut buf) {
-                Ok(XmlEvent::Start(_)) => {
-                    skip_element(reader)?;
-                }
-                Ok(XmlEvent::Text(ref e)) => {
-                    let text = e.unescape_and_decode(reader)?;
-                    content = Some(text);
-                }
-                Ok(XmlEvent::CData(ref e)) => {
-                    let text = reader.decode(e).as_ref().to_owned();
-                    content = Some(text);
-                }
-                Ok(XmlEvent::End(_)) |
-                Ok(XmlEvent::Eof) => break,
-                Err(err) => return Err(err.into()),
-                _ => (),
+fn try_parse_text<'a, B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<Option<String>> {
+    let mut buf = Vec::new();
+    let mut content: Option<String> = None;
+    loop {
+        match reader.read_event(&mut buf) {
+            Ok(XmlEvent::Start(_)) => {
+                skip_element(reader)?;
             }
-            buf.clear();
+            Ok(XmlEvent::Text(ref e)) => {
+                let text = e.unescape_and_decode(reader)?;
+                content = Some(text);
+            }
+            Ok(XmlEvent::CData(ref e)) => {
+                let text = reader.decode(e).to_string();
+                content = Some(text);
+            }
+            Ok(XmlEvent::End(_)) |
+            Ok(XmlEvent::Eof) => break,
+            Err(err) => return Err(err.into()),
+            _ => (),
         }
-        Ok(content)
+        buf.clear();
     }
+    Ok(content)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -150,12 +145,12 @@ impl FromXml for RSS {
                             rss.link = rdf.link;
                         }
                         "title" => {
-                            if let Some(title) = Option::from_xml(reader, e)? {
+                            if let Some(title) = try_parse_text(reader)? {
                                 rss.title = title;
                             }
                         }
                         "link" | "atom:link" => {
-                            if let Some(link) = Option::from_xml(reader, e)? {
+                            if let Some(link) = try_parse_text(reader)? {
                                 // RSS
                                 rss.link = link;
                             } else {
@@ -212,10 +207,10 @@ impl FromXml for Item {
                 Ok(XmlEvent::Start(ref e)) => {
                     match reader.decode(e.name()).as_ref() {
                         "title" => {
-                            item.title = Option::from_xml(reader, e)?;
+                            item.title = try_parse_text(reader)?;
                         }
                         "link" => {
-                            if let Some(link) = Option::from_xml(reader, e)? {
+                            if let Some(link) = try_parse_text(reader)? {
                                 // RSS
                                 item.link = Some(link);
                             } else if let Some(AtomLink::Alternate(link)) =
@@ -226,7 +221,7 @@ impl FromXml for Item {
                             }
                         }
                         "id" | "guid" => {
-                            item.id = Option::from_xml(reader, e)?;
+                            item.id = try_parse_text(reader)?;
                         }
                         _ => skip_element(reader)?,
                     }
