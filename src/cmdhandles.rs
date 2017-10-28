@@ -198,13 +198,14 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                 })
         })
         .and_then(|(bot, db, subscriber, chat_id, feed)| {
-            match db.subscribe(subscriber, feed.source.as_ref().unwrap(), &feed) {
+            let source = feed.source.as_ref().unwrap();
+            match db.subscribe(subscriber, source, &feed) {
                 Ok(_) => {
                     bot.message(
                         chat_id,
                         format!(
                             "《<a href=\"{}\">{}</a>》订阅成功",
-                            EscapeUrl(&feed.link),
+                            EscapeUrl(source),
                             Escape(&feed.title)
                         ),
                     ).parse_mode("HTML")
