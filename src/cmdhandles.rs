@@ -182,13 +182,36 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                 })
         })
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
+            bot.message(chat_id, "处理中, 请稍候".to_owned())
+                .send()
+                .map_err(Some)
+                .map(move |(bot, msg)| {
+                    (
+                        bot,
+                        db,
+                        subscriber,
+                        feed_link,
+                        chat_id,
+                        msg.message_id,
+                        lphandle,
+                    )
+                })
+        })
+        .and_then(|(bot,
+          db,
+          subscriber,
+          feed_link,
+          chat_id,
+          msg_id,
+          lphandle)| {
             let session = Session::new(lphandle);
             let bot2 = bot.clone();
             feed::fetch_feed(session, gen_ua(&bot), feed_link)
-                .map(move |feed| (bot2, db, subscriber, chat_id, feed))
+                .map(move |feed| (bot2, db, subscriber, chat_id, msg_id, feed))
                 .or_else(move |e| {
-                    bot.message(
+                    bot.edit_message_text(
                         chat_id,
+                        msg_id,
                         format!("订阅失败: {}", to_chinese_error_msg(e)),
                     ).send()
                         .then(|result| match result {
@@ -197,12 +220,13 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                         })
                 })
         })
-        .and_then(|(bot, db, subscriber, chat_id, feed)| {
+        .and_then(|(bot, db, subscriber, chat_id, msg_id, feed)| {
             let source = feed.source.as_ref().unwrap();
             match db.subscribe(subscriber, source, &feed) {
                 Ok(_) => {
-                    bot.message(
+                    bot.edit_message_text(
                         chat_id,
+                        msg_id,
                         format!(
                             "《<a href=\"{}\">{}</a>》订阅成功",
                             EscapeUrl(source),
@@ -213,12 +237,13 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                         .send()
                 }
                 Err(Error(ErrorKind::AlreadySubscribed, _)) => {
-                    bot.message(chat_id, "已订阅过的 RSS".to_string())
+                    bot.edit_message_text(chat_id, msg_id, "已订阅过的 RSS".to_string())
                         .send()
                 }
                 Err(e) => {
                     log_error(&e);
-                    bot.message(chat_id, format!("error: {}", e)).send()
+                    bot.edit_message_text(chat_id, msg_id, format!("error: {}", e))
+                        .send()
                 }
             }.map_err(Some)
         })
