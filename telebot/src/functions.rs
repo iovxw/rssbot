@@ -24,7 +24,8 @@ pub enum ChatID {
 
 impl serde::Serialize for ChatID {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         match *self {
             ChatID::String(ref id) => serializer.serialize_str(id),
@@ -42,6 +43,35 @@ impl From<String> for ChatID {
 impl From<i64> for ChatID {
     fn from(id: i64) -> Self {
         ChatID::Integer(id)
+    }
+}
+
+pub enum File{
+    String(String),
+    InputFile(String, Vec<u8>),
+}
+
+impl From<String> for File {
+    fn from(id: String) -> Self {
+        File::String(id)
+    }
+}
+
+impl serde::Serialize for File {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+        S: serde::Serializer,
+    {
+        match *self {
+            File::String(ref id) => serializer.serialize_str(id),
+            File::InputFile(..) => unreachable!(),
+        }
+    }
+}
+
+impl File {
+    pub fn new(name: String, data: Vec<u8>) -> File {
+        File::InputFile(name, data)
     }
 }
 
@@ -101,18 +131,18 @@ impl Into<String> for Action {
 #[function = "get_me"]
 pub struct GetMe;
 
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "getUpdates"]
 #[answer = "Updates"]
 #[function = "get_updates"]
 pub struct GetUpdates {
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     offset: Option<Integer>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     limit: Option<Integer>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     timeout: Option<Integer>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     allowed_updates: Option<Vec<String>>,
 }
 
@@ -124,22 +154,22 @@ pub struct GetUpdates {
 pub struct Message {
     chat_id: ChatID,
     text: String,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     parse_mode: Option<String>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     disable_web_page_preview: Option<Boolean>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     disable_notificaton: Option<Boolean>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     reply_to_message_id: Option<Integer>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     reply_markup: Option<NotImplemented>,
 }
 
 /// Use this method to get up to date information about the chat (current name of the user for
 /// one-on-one conversations, current username of a user, group or channel, etc.). Returns a Chat
 /// object on success.
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "getChat"]
 #[answer = "Chat"]
 #[function = "get_chat"]
@@ -151,7 +181,7 @@ pub struct GetChat {
 /// ChatMember objects that contains information about all chat administrators except other bots.
 /// If the chat is a group or a supergroup and no administrators were appointed, only the creator
 /// will be returned.
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "getChatAdministrators"]
 #[answer = "Vector<objects::ChatMember>"]
 #[function = "get_chat_administrators"]
@@ -160,7 +190,7 @@ pub struct GetChatAdministrators {
 }
 
 /// Use this method to get the number of members in a chat. Returns Int on success.
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "getChatMembersCount"]
 #[answer = "Integer"]
 #[function = "get_chat_members_count"]
@@ -170,7 +200,7 @@ pub struct GetChatMemberCounts {
 
 /// Use this method to get information about a member of a chat. Returns a ChatMember object on
 /// success.
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "getChatMember"]
 #[answer = "ChatMember"]
 #[function = "get_chat_member"]
@@ -182,7 +212,7 @@ pub struct GetChatMember {
 /// Use this method to edit text and game messages sent by the bot or via the bot (for inline bots).
 /// On success, if edited message is sent by the bot, the edited Message is returned,
 /// otherwise True is returned.
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "editMessageText"]
 #[answer = "Message"]
 #[function = "edit_message_text"]
@@ -190,9 +220,9 @@ pub struct EditMessageText {
     chat_id: ChatID,
     message_id: Integer,
     text: String,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     parse_mode: Option<String>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     disable_web_page_preview: Option<Boolean>,
 }
 
@@ -204,11 +234,32 @@ pub struct EditMessageText {
 /// it can delete messages from any other user and service messages about people joining or
 /// leaving the group (other types of service messages may only be removed by the group creator).
 /// In channels, bots can only remove their own messages. Returns True on success.
-#[derive(TelegramFunction,  Serialize)]
+#[derive(TelegramFunction, Serialize)]
 #[call = "deleteMessage"]
 #[answer = "Boolean"]
 #[function = "delete_message"]
 pub struct DeleteMessage {
     chat_id: ChatID,
     message_id: Integer,
+}
+
+/// Use this method to send general files. On success, the sent Message is returned. Bots can
+/// currently send files of any type of up to 50 MB in size, this limit may be changed in the
+/// future.
+#[derive(TelegramFunction, Serialize)]
+#[call = "sendDocument"]
+#[answer = "Message"]
+#[function = "document"]
+#[file_kind = "document"]
+pub struct SendDocument {
+    chat_id: Integer,
+    document: File,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    caption: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disable_notification: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_to_message_id: Option<Integer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reply_markup: Option<NotImplemented>,
 }

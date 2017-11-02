@@ -164,6 +164,9 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
     let function = syn::Lit::Str((*function).clone(), syn::StrStyle::Cooked);
     let bot_function = syn::Ident::from(config.get("function").unwrap().as_str());
     let answer = syn::Ident::from(config.get("answer").unwrap().as_str());
+    let file_kind = config.get("file_kind").map(
+        |tmp| syn::Ident::from(tmp.as_str()),
+    );
 
     let fields: Vec<_> = match ast.body {
         syn::Body::Struct(syn::VariantData::Struct(ref fields)) => {
@@ -259,6 +262,66 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
     let trait_name = syn::Ident::from(format!("Function{}", name.as_ref()));
     let wrapper_name = syn::Ident::from(format!("Wrapper{}", name.as_ref()));
 
+    let send_fn = if let Some(file_kind) = file_kind {
+        let field_compulsory_not_file = fields
+            .iter()
+            .filter(|f| !is_option_ident(&f))
+            .filter(|f| *f.0 != file_kind)
+            .map(|f| f.0)
+            .collect::<Vec<_>>();
+        let field_compulsory_not_file_str = field_compulsory_not_file
+            .iter()
+            .map(|f| f.to_string())
+            .collect::<Vec<_>>();
+        let field_optional_str = field_optional
+            .iter()
+            .map(|f| f.as_ref())
+            .collect::<Vec<_>>();
+        let field_optional = field_optional.clone();
+        quote!{
+            let #wrapper_name {bot, inner} = self;
+            if let File::InputFile(..) = inner.#file_kind {
+                use ::curl::easy::{Easy, Form};
+                let mut req = Easy::new();
+                let mut form = Form::new();
+                #(
+                    form.part(#field_compulsory_not_file_str)
+                        .contents(format!("{:?}", inner.#field_compulsory_not_file).as_bytes())
+                        .add().unwrap();
+                )*
+                #(
+                    if let Some(v) = inner.#field_optional {
+                        form.part(#field_optional_str)
+                            .contents(format!("{:?}", v).as_bytes())
+                            .add().unwrap();
+                    }
+                )*
+                let #name { #file_kind, .. } = inner;
+                if let File::InputFile(file_name, data) = #file_kind {
+                    form.part(stringify!(#file_kind))
+                        .buffer(&file_name, data)
+                        .content_type("application/octet-stream")
+                        .add().unwrap();
+                } else {
+                    unreachable!();
+                }
+
+                req.post(true).unwrap();
+                req.httppost(form).unwrap();
+                ::futures::future::Either::A(bot.fetch(#function, req))
+            } else {
+                let msg = serde_json::to_string(&inner).unwrap();
+                ::futures::future::Either::B(bot.fetch_json(#function, &msg))
+            }
+            .map(move |x| (RcBot { inner: bot.clone() }, x))
+        }
+    } else {
+        quote!{
+            let msg = serde_json::to_string(&self.inner).unwrap();
+            self.bot.fetch_json(#function, &msg)
+                .map(move |x| (RcBot { inner: self.bot.clone() }, x))
+        }
+    };
     quote! {
         #[allow(dead_code)]
         pub struct #wrapper_name {
@@ -291,9 +354,7 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
         impl #wrapper_name {
             pub fn send<'a>(self)
                             -> impl Future<Item=(RcBot, objects::#answer), Error=Error> + 'a {
-                let msg = serde_json::to_string(&self.inner).unwrap();
-                self.bot.fetch_json(#function, &msg)
-                    .map(move |x| (RcBot { inner: self.bot.clone() }, x))
+                #send_fn
             }
 
             #(
