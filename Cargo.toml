@@ -16,6 +16,7 @@ pinyin-order = "0.1"
 futures-await = "0.1"
 quick-xml = "0.9"
 error-chain = "0.10"
+chrono = "0.4"
 
 telebot = { path = "./telebot" }
 # version specified by telebot

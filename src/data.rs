@@ -20,7 +20,7 @@ fn get_hash<T: Hash>(t: &T) -> u64 {
 type FeedID = u64;
 type SubscriberID = i64;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Feed {
     pub link: String,
     pub title: String,

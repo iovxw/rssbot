@@ -4,6 +4,7 @@ use futures::future;
 use futures::prelude::*;
 use tokio_curl::Session;
 use telebot;
+use telebot::functions::File;
 use pinyin_order;
 
 use errors::*;
@@ -11,12 +12,14 @@ use feed;
 use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
             to_chinese_error_msg, log_error, gen_ua};
 use data::Database;
+use opml::to_opml;
 
 pub fn register_commands(bot: &telebot::RcBot, db: &Database, lphandle: Handle) {
     register_rss(bot, db.clone());
     register_sub(bot, db.clone(), lphandle);
     register_unsub(bot, db.clone());
     register_unsubthis(bot, db.clone());
+    register_export(bot, db.clone());
 }
 
 fn register_rss(bot: &telebot::RcBot, db: Database) {
@@ -499,4 +502,76 @@ fn check_channel<'a>(
 
         Ok(Some(channel_id))
     }
+}
+
+fn register_export(bot: &telebot::RcBot, db: Database) {
+    let handle = bot.new_cmd("/export")
+        .map_err(Some)
+        .and_then(move |(bot, msg)| {
+            let text = msg.text.unwrap();
+            let args: Vec<&str> = text.split_whitespace().collect();
+            let subscriber: future::Either<_, _>;
+            match args.len() {
+                0 => {
+                    subscriber = future::Either::A(future::ok(Some(msg.chat.id)));
+                }
+                1 => {
+                    let channel = args[0];
+                    let channel_id =
+                        check_channel(&bot, channel, msg.chat.id, msg.from.unwrap().id);
+                    subscriber = future::Either::B(channel_id);
+                }
+                _ => {
+                    let r = bot.message(
+                        msg.chat.id,
+                        "使用方法: /export <Channel ID>".to_string(),
+                    ).send()
+                        .then(|result| match result {
+                            Ok(_) => Err(None),
+                            Err(e) => Err(Some(e)),
+                        });
+                    return future::Either::A(r);
+                }
+            }
+            let db = db.clone();
+            let chat_id = msg.chat.id;
+            let r = subscriber
+                .then(|result| match result {
+                    Ok(Some(ok)) => Ok(ok),
+                    Ok(None) => Err(None),
+                    Err(err) => Err(Some(err)),
+                })
+                .map(move |subscriber| (bot, db, subscriber, chat_id));
+            future::Either::B(r)
+        })
+        .and_then(|(bot, db, subscriber, chat_id)| {
+            match db.get_subscribed_feeds(subscriber) {
+                Some(feeds) => Ok((bot, chat_id, feeds)),
+                None => Err((bot, chat_id)),
+            }.into_future()
+                .or_else(|(bot, chat_id)| {
+                    bot.message(chat_id, "订阅列表为空".to_string())
+                        .send()
+                        .then(|r| match r {
+                            Ok(_) => Err(None),
+                            Err(e) => Err(Some(e)),
+                        })
+                })
+        })
+        .and_then(|(bot, chat_id, feeds)| {
+            bot.document(
+                chat_id,
+                File::new("feeds.opml".into(), to_opml(feeds).into_bytes()),
+            ).send()
+                .map_err(Some)
+        })
+        .then(|result| match result {
+            Err(Some(err)) => {
+                error!("telebot: {:?}", err);
+                Ok::<(), ()>(())
+            }
+            _ => Ok(()),
+        });
+
+    bot.register(handle);
 }

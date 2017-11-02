@@ -19,6 +19,7 @@
     /sub       - 订阅一个 RSS: /sub http://example.com/feed.xml
     /unsub     - 退订一个 RSS: /unsub http://example.com/feed.xml
     /unsubthis - 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel
+    /export    - 导出为 OPML
 
 ## 下载
 

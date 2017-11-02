@@ -18,6 +18,7 @@ extern crate telebot;
 extern crate lazy_static;
 extern crate regex;
 extern crate pinyin_order;
+extern crate chrono;
 
 use tokio_core::reactor::Core;
 use futures::Stream;
@@ -29,6 +30,7 @@ mod utlis;
 mod cmdhandles;
 mod fetcher;
 mod checker;
+mod opml;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
