@@ -74,7 +74,7 @@ impl Bot {
         func: &str,
         msg: &str,
     ) -> impl Future<Item = T, Error = Error> + 'a {
-        println!("Send JSON: {}", msg);
+        debug!("Send JSON: {}", msg);
 
         let mut header = List::new();
         header.append("Content-Type: application/json").unwrap();
@@ -199,6 +199,7 @@ impl RcBot {
                 Ok(x)
             })
             .filter_map(move |mut val| {
+                debug!("Got an update from Telegram: {:?}", val);
                 let mut forward: Option<String> = None;
 
                 if let Some(ref mut message) = val.message {

@@ -306,6 +306,7 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
                     unreachable!();
                 }
 
+                debug!("Send FormData: {:?}", form);
                 req.post(true).unwrap();
                 req.httppost(form).unwrap();
                 ::futures::future::Either::A(bot.fetch(#function, req))
