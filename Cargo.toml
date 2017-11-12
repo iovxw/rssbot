@@ -9,7 +9,7 @@ repository = "https://github.com/iovxw/rssbot"
 
 [dependencies]
 log = "0.3"
-env_logger = "0.3"
+env_logger = "0.4"
 lazy_static = "0.2"
 regex = "0.2"
 pinyin-order = "0.1"
