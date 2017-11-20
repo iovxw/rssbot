@@ -6,6 +6,9 @@ license = "Unlicense"
 readme = "README.md"
 homepage = "https://github.com/iovxw/rssbot"
 repository = "https://github.com/iovxw/rssbot"
+publish = false
+
+[workspace]
 
 [dependencies]
 log = "0.3"

@@ -12,6 +12,8 @@ documentation = "https://docs.rs/telebot"
 
 keywords = ["telebot", "telegram", "bot", "chat"]
 
+publish = false
+
 [dependencies]
 serde = "^1.0"
 serde_json = "^1.0"

@@ -6,6 +6,8 @@ authors = ["bytesnake [bytesnake@mailbox.org"]
 description = "Getters and setters for the telebot library"
 license = "MIT"
 
+publish = false
+
 [lib]
 proc-macro = true
 # Unit tests don't seem to work for proc-macro crates.
