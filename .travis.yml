@@ -16,7 +16,7 @@ before_deploy: |-
     sudo apt-get install -y \
          build-essential cmake curl musl-tools && \
     rustup target add x86_64-unknown-linux-musl && \
-    export VERS=1.0.2l && \
+    export VERS=1.0.2o && \
     curl -O https://www.openssl.org/source/openssl-$VERS.tar.gz && \
     tar xvzf openssl-$VERS.tar.gz && cd openssl-$VERS && \
     env CC=musl-gcc ./config --prefix=$TRAVIS_BUILD_DIR/openssl && \
