@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait, proc_macro, generators)]
+#![feature(proc_macro, generators)]
 
 #[macro_use]
 extern crate log;
