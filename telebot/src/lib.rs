@@ -1,4 +1,3 @@
-#![feature(conservative_impl_trait)]
 #![feature(custom_attribute)]
 #![allow(unused_attributes)]
 

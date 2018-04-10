@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "rssbot"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "chrono 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "curl 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
