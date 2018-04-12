@@ -16,9 +16,7 @@ env_logger = "0.4"
 lazy_static = "0.2"
 regex = "0.2"
 pinyin-order = "0.1"
-# futures-await = "0.1"
-# https://github.com/alexcrichton/futures-await/issues/79
-futures-await = { git = "https://github.com/ngg/futures-await", branch = "0.1", version = "0.1" }
+futures-await = "0.1"
 quick-xml = "0.9"
 error-chain = "0.10"
 chrono = "0.4"
