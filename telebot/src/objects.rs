@@ -24,7 +24,7 @@ pub struct User {
 #[derive(Deserialize, Debug)]
 pub struct Chat {
     pub id: Integer,
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub kind: String,
     pub title: Option<String>,
     pub username: Option<String>,
@@ -37,7 +37,7 @@ pub struct Chat {
 /// URLs, etc.
 #[derive(Deserialize, Debug)]
 pub struct MessageEntity {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub kind: String,
     pub offset: Integer,
     pub length: Integer,
@@ -104,7 +104,6 @@ pub struct Update {
     pub shipping_query: Option<NotImplemented>,
     pub pre_checkout_query: Option<NotImplemented>,
 }
-
 
 /// This object contains information about one member of the chat.
 #[derive(Deserialize, Debug)]

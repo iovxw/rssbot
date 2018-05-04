@@ -8,29 +8,29 @@ extern crate error_chain;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
-extern crate quick_xml;
 extern crate curl;
 extern crate futures_await as futures;
+extern crate quick_xml;
+extern crate telebot;
 extern crate tokio_core;
 extern crate tokio_curl;
-extern crate telebot;
 #[macro_use]
 extern crate lazy_static;
-extern crate regex;
-extern crate pinyin_order;
 extern crate chrono;
+extern crate pinyin_order;
+extern crate regex;
 
-use tokio_core::reactor::Core;
 use futures::Stream;
+use tokio_core::reactor::Core;
 
+mod checker;
+mod cmdhandles;
+mod data;
 mod errors;
 mod feed;
-mod data;
-mod utlis;
-mod cmdhandles;
 mod fetcher;
-mod checker;
 mod opml;
+mod utlis;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

@@ -1,15 +1,15 @@
 use std;
-use std::fs::File;
-use std::path::Path;
-use std::hash::{Hash, Hasher};
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::hash::{Hash, Hasher};
+use std::path::Path;
+use std::rc::Rc;
 
 use serde_json;
 
-use feed;
 use errors::*;
+use feed;
 
 fn get_hash<T: Hash>(t: &T) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::default();
@@ -95,22 +95,20 @@ impl DatabaseInner {
     ) -> Result<()> {
         let feed_id = get_hash(&rss_link);
         {
-            let subscribed_feeds = self.subscribers.entry(subscriber).or_insert_with(
-                HashSet::new,
-            );
+            let subscribed_feeds = self.subscribers
+                .entry(subscriber)
+                .or_insert_with(HashSet::new);
             if !subscribed_feeds.insert(feed_id) {
                 return Err(ErrorKind::AlreadySubscribed.into());
             }
         }
         {
-            let feed = self.feeds.entry(feed_id).or_insert_with(|| {
-                Feed {
-                    link: rss_link.to_owned(),
-                    title: rss.title.to_owned(),
-                    error_count: 0,
-                    hash_list: rss.items.iter().map(gen_item_hash).collect(),
-                    subscribers: HashSet::new(),
-                }
+            let feed = self.feeds.entry(feed_id).or_insert_with(|| Feed {
+                link: rss_link.to_owned(),
+                title: rss.title.to_owned(),
+                error_count: 0,
+                hash_list: rss.items.iter().map(gen_item_hash).collect(),
+                subscribers: HashSet::new(),
             });
             feed.subscribers.insert(subscriber);
         }
@@ -155,8 +153,10 @@ impl DatabaseInner {
 
     fn delete_subscriber(&mut self, subscriber: SubscriberID) {
         self.get_subscribed_feeds(subscriber)
-            .map(|feeds| for feed in feeds {
-                let _ = self.unsubscribe(subscriber, &feed.link);
+            .map(|feeds| {
+                for feed in feeds {
+                    let _ = self.unsubscribe(subscriber, &feed.link);
+                }
             })
             .unwrap_or_default();
     }
@@ -206,14 +206,10 @@ impl DatabaseInner {
 
     fn save(&self) -> Result<()> {
         let feeds_list: Vec<&Feed> = self.feeds.iter().map(|(_id, feed)| feed).collect();
-        let mut file = File::create(&self.path).chain_err(|| {
-            ErrorKind::DatabaseSave(self.path.to_owned())
-        })?;
-        serde_json::to_writer(&mut file, &feeds_list).chain_err(
-            || {
-                ErrorKind::DatabaseSave(self.path.to_owned())
-            },
-        )
+        let mut file =
+            File::create(&self.path).chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))?;
+        serde_json::to_writer(&mut file, &feeds_list)
+            .chain_err(|| ErrorKind::DatabaseSave(self.path.to_owned()))
     }
 }
 
@@ -224,7 +220,9 @@ pub struct Database {
 
 impl Clone for Database {
     fn clone(&self) -> Database {
-        Database { inner: Rc::clone(&self.inner) }
+        Database {
+            inner: Rc::clone(&self.inner),
+        }
     }
 }
 
@@ -256,12 +254,9 @@ impl Database {
     pub fn open(path: &str) -> Result<Database> {
         let p = Path::new(path);
         if p.exists() {
-            let f = File::open(path).chain_err(
-                || ErrorKind::DatabaseOpen(path.to_owned()),
-            )?;
-            let feeds_list: Vec<Feed> = serde_json::from_reader(&f).chain_err(
-                || ErrorKind::DatabaseFormat,
-            )?;
+            let f = File::open(path).chain_err(|| ErrorKind::DatabaseOpen(path.to_owned()))?;
+            let feeds_list: Vec<Feed> =
+                serde_json::from_reader(&f).chain_err(|| ErrorKind::DatabaseFormat)?;
 
             let mut feeds: HashMap<FeedID, Feed> = HashMap::with_capacity(feeds_list.len());
             let mut subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();

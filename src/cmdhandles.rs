@@ -1,18 +1,18 @@
-use telebot::functions::*;
-use tokio_core::reactor::Handle;
 use futures::future;
 use futures::prelude::*;
-use tokio_curl::Session;
+use pinyin_order;
 use telebot;
 use telebot::functions::File;
-use pinyin_order;
+use telebot::functions::*;
+use tokio_core::reactor::Handle;
+use tokio_curl::Session;
 
+use data::Database;
 use errors::*;
 use feed;
-use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
-            to_chinese_error_msg, log_error, gen_ua};
-use data::Database;
 use opml::to_opml;
+use utlis::{format_and_split_msgs, gen_ua, log_error, send_multiple_messages,
+            to_chinese_error_msg, Escape, EscapeUrl};
 
 pub fn register_commands(bot: &telebot::RcBot, db: &Database, lphandle: Handle) {
     register_rss(bot, db.clone());
@@ -164,9 +164,7 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                     Ok(None) => Err(None),
                     Err(err) => Err(Some(err)),
                 })
-                .map(move |subscriber| {
-                    (bot, db, subscriber, feed_link, chat_id, lphandle)
-                });
+                .map(move |subscriber| (bot, db, subscriber, feed_link, chat_id, lphandle));
             future::Either::B(r)
         })
         .and_then(|(bot, db, subscriber, feed_link, chat_id, lphandle)| {
@@ -200,45 +198,39 @@ fn register_sub(bot: &telebot::RcBot, db: Database, lphandle: Handle) {
                     )
                 })
         })
-        .and_then(|(bot,
-          db,
-          subscriber,
-          feed_link,
-          chat_id,
-          msg_id,
-          lphandle)| {
-            let session = Session::new(lphandle);
-            let bot2 = bot.clone();
-            feed::fetch_feed(session, gen_ua(&bot), feed_link)
-                .map(move |feed| (bot2, db, subscriber, chat_id, msg_id, feed))
-                .or_else(move |e| {
-                    bot.edit_message_text(
-                        chat_id,
-                        msg_id,
-                        format!("订阅失败: {}", to_chinese_error_msg(e)),
-                    ).send()
-                        .then(|result| match result {
-                            Ok(_) => Err(None),
-                            Err(e) => Err(Some(e)),
-                        })
-                })
-        })
+        .and_then(
+            |(bot, db, subscriber, feed_link, chat_id, msg_id, lphandle)| {
+                let session = Session::new(lphandle);
+                let bot2 = bot.clone();
+                feed::fetch_feed(session, gen_ua(&bot), feed_link)
+                    .map(move |feed| (bot2, db, subscriber, chat_id, msg_id, feed))
+                    .or_else(move |e| {
+                        bot.edit_message_text(
+                            chat_id,
+                            msg_id,
+                            format!("订阅失败: {}", to_chinese_error_msg(e)),
+                        ).send()
+                            .then(|result| match result {
+                                Ok(_) => Err(None),
+                                Err(e) => Err(Some(e)),
+                            })
+                    })
+            },
+        )
         .and_then(|(bot, db, subscriber, chat_id, msg_id, feed)| {
             let source = feed.source.as_ref().unwrap();
             match db.subscribe(subscriber, source, &feed) {
-                Ok(_) => {
-                    bot.edit_message_text(
-                        chat_id,
-                        msg_id,
-                        format!(
-                            "《<a href=\"{}\">{}</a>》订阅成功",
-                            EscapeUrl(source),
-                            Escape(&feed.title)
-                        ),
-                    ).parse_mode("HTML")
-                        .disable_web_page_preview(true)
-                        .send()
-                }
+                Ok(_) => bot.edit_message_text(
+                    chat_id,
+                    msg_id,
+                    format!(
+                        "《<a href=\"{}\">{}</a>》订阅成功",
+                        EscapeUrl(source),
+                        Escape(&feed.title)
+                    ),
+                ).parse_mode("HTML")
+                    .disable_web_page_preview(true)
+                    .send(),
                 Err(Error(ErrorKind::AlreadySubscribed, _)) => {
                     bot.edit_message_text(chat_id, msg_id, "已订阅过的 RSS".to_string())
                         .send()
@@ -307,18 +299,16 @@ fn register_unsub(bot: &telebot::RcBot, db: Database) {
         })
         .and_then(|(bot, db, subscriber, feed_link, chat_id)| {
             match db.unsubscribe(subscriber, &feed_link) {
-                Ok(feed) => {
-                    bot.message(
-                        chat_id,
-                        format!(
-                            "《<a href=\"{}\">{}</a>》退订成功",
-                            EscapeUrl(&feed.link),
-                            Escape(&feed.title)
-                        ),
-                    ).parse_mode("HTML")
-                        .disable_web_page_preview(true)
-                        .send()
-                }
+                Ok(feed) => bot.message(
+                    chat_id,
+                    format!(
+                        "《<a href=\"{}\">{}</a>》退订成功",
+                        EscapeUrl(&feed.link),
+                        Escape(&feed.title)
+                    ),
+                ).parse_mode("HTML")
+                    .disable_web_page_preview(true)
+                    .send(),
                 Err(Error(ErrorKind::NotSubscribed, _)) => {
                     bot.message(chat_id, "未订阅过的 RSS".to_string())
                         .send()
@@ -362,7 +352,6 @@ fn register_unsubthis(bot: &telebot::RcBot, db: Database) {
                             Err(e) => Err(Some(e)),
                         })
                 })
-
         })
         .and_then(|(bot, db, chat_id, reply_msg)| {
             if let Some(m) = reply_msg.text {
@@ -406,18 +395,16 @@ fn register_unsubthis(bot: &telebot::RcBot, db: Database) {
         })
         .and_then(|(bot, db, chat_id, feed_link)| {
             match db.unsubscribe(chat_id, &feed_link) {
-                Ok(feed) => {
-                    bot.message(
-                        chat_id,
-                        format!(
-                            "《<a href=\"{}\">{}</a>》退订成功",
-                            EscapeUrl(&feed.link),
-                            Escape(&feed.title)
-                        ),
-                    ).parse_mode("HTML")
-                        .disable_web_page_preview(true)
-                        .send()
-                }
+                Ok(feed) => bot.message(
+                    chat_id,
+                    format!(
+                        "《<a href=\"{}\">{}</a>》退订成功",
+                        EscapeUrl(&feed.link),
+                        Escape(&feed.title)
+                    ),
+                ).parse_mode("HTML")
+                    .disable_web_page_preview(true)
+                    .send(),
                 Err(e) => {
                     log_error(&e);
                     bot.message(chat_id, format!("error: {}", e)).send()
@@ -443,15 +430,19 @@ fn check_channel<'a>(
 ) -> impl Future<Item = Option<i64>, Error = telebot::Error> + 'a {
     let channel = channel
         .parse::<i64>()
-        .map(|_| if !channel.starts_with("-100") {
-            format!("-100{}", channel)
-        } else {
-            channel.to_owned()
+        .map(|_| {
+            if !channel.starts_with("-100") {
+                format!("-100{}", channel)
+            } else {
+                channel.to_owned()
+            }
         })
-        .unwrap_or_else(|_| if !channel.starts_with('@') {
-            format!("@{}", channel)
-        } else {
-            channel.to_owned()
+        .unwrap_or_else(|_| {
+            if !channel.starts_with('@') {
+                format!("@{}", channel)
+            } else {
+                channel.to_owned()
+            }
         });
     let bot = bot.clone();
     async_block! {

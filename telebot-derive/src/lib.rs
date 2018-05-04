@@ -1,5 +1,5 @@
 #![feature(proc_macro)]
-#![recursion_limit="150"]
+#![recursion_limit = "150"]
 
 extern crate proc_macro;
 #[macro_use]
@@ -22,12 +22,10 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
     let query_kind = config.get("query").map(|tmp| syn::Lit::from(tmp.as_str()));
 
     let fields: Vec<_> = match ast.body {
-        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => {
-            fields
-                .iter()
-                .map(|f| (f.ident.as_ref().unwrap(), &f.ty))
-                .collect()
-        }
+        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => fields
+            .iter()
+            .map(|f| (f.ident.as_ref().unwrap(), &f.ty))
+            .collect(),
         syn::Body::Struct(syn::VariantData::Unit) => vec![],
         _ => panic!("#[derive(getters)] can only be used with braced structs"),
     };
@@ -35,12 +33,10 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
     let name = &ast.ident;
     let is_option_ident = |ref f: &(&syn::Ident, &syn::Ty)| -> bool {
         match *f.1 {
-            syn::Ty::Path(_, ref path) => {
-                match path.segments.first().unwrap().ident.as_ref() {
-                    "Option" => true,
-                    _ => false,
-                }
-            }
+            syn::Ty::Path(_, ref path) => match path.segments.first().unwrap().ident.as_ref() {
+                "Option" => true,
+                _ => false,
+            },
             _ => false,
         }
     };
@@ -65,18 +61,15 @@ fn expand_setter(ast: syn::MacroInput) -> quote::Tokens {
         .filter(|f| f.as_ref() != "kind" && f.as_ref() != "id")
         .collect();
 
-
     let field_compulsory3 = field_compulsory.clone();
     let values: Vec<_> = fields
         .iter()
         .filter(|f| f.0.as_ref() != "kind" && f.0.as_ref() != "id")
         .map(|f| match *f.1 {
-            syn::Ty::Path(_, ref path) => {
-                match path.segments.first().unwrap().ident.as_ref() {
-                    "Option" => return syn::Ident::from("None"),
-                    _ => return syn::Ident::from(format!("_{}", f.0.as_ref())),
-                }
-            }
+            syn::Ty::Path(_, ref path) => match path.segments.first().unwrap().ident.as_ref() {
+                "Option" => return syn::Ident::from("None"),
+                _ => return syn::Ident::from(format!("_{}", f.0.as_ref())),
+            },
             _ => return syn::Ident::from("None"),
         })
         .collect();
@@ -164,21 +157,18 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
     let function = syn::Lit::Str((*function).clone(), syn::StrStyle::Cooked);
     let bot_function = syn::Ident::from(config.get("function").unwrap().as_str());
     let answer = syn::Ident::from(config.get("answer").unwrap().as_str());
-    let file_kind = config.get("file_kind").map(
-        |tmp| syn::Ident::from(tmp.as_str()),
-    );
+    let file_kind = config
+        .get("file_kind")
+        .map(|tmp| syn::Ident::from(tmp.as_str()));
 
     let fields: Vec<_> = match ast.body {
-        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => {
-            fields
-                .iter()
-                .map(|f| (f.ident.as_ref().unwrap(), &f.ty))
-                .collect()
-        }
+        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => fields
+            .iter()
+            .map(|f| (f.ident.as_ref().unwrap(), &f.ty))
+            .collect(),
         syn::Body::Struct(syn::VariantData::Unit) => vec![],
         _ => panic!("#[derive(getters)] can only be used with braced structs"),
     };
-
 
     /*for field in &fields {
         println!("{:?}", field.1);
@@ -187,12 +177,10 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
     let name = &ast.ident;
     let is_option_ident = |ref f: &(&syn::Ident, &syn::Ty)| -> bool {
         match *f.1 {
-            syn::Ty::Path(_, ref path) => {
-                match path.segments.first().unwrap().ident.as_ref() {
-                    "Option" => true,
-                    _ => false,
-                }
-            }
+            syn::Ty::Path(_, ref path) => match path.segments.first().unwrap().ident.as_ref() {
+                "Option" => true,
+                _ => false,
+            },
             _ => false,
         }
     };
@@ -215,12 +203,10 @@ fn expand_function(ast: syn::MacroInput) -> quote::Tokens {
     let values: Vec<_> = fields
         .iter()
         .map(|f| match *f.1 {
-            syn::Ty::Path(_, ref path) => {
-                match path.segments.first().unwrap().ident.as_ref() {
-                    "Option" => return syn::Ident::from("None"),
-                    _ => return syn::Ident::from(format!("_{}", f.0.as_ref())),
-                }
-            }
+            syn::Ty::Path(_, ref path) => match path.segments.first().unwrap().ident.as_ref() {
+                "Option" => return syn::Ident::from("None"),
+                _ => return syn::Ident::from(format!("_{}", f.0.as_ref())),
+            },
             _ => return syn::Ident::from("None"),
         })
         .collect();

@@ -3,12 +3,12 @@
 //! telebot-derive implements setter, setter and send methods to each struct
 
 use bot::{Bot, RcBot};
-use serde_json;
-use serde;
-use objects;
-use objects::{Integer, Boolean, NotImplemented};
 use error::Error;
 use futures::Future;
+use objects;
+use objects::{Boolean, Integer, NotImplemented};
+use serde;
+use serde_json;
 use std::rc::Rc;
 
 pub trait TelegramSendable {
@@ -46,7 +46,7 @@ impl From<i64> for ChatID {
     }
 }
 
-pub enum File{
+pub enum File {
     String(String),
     InputFile(String, Vec<u8>),
 }
@@ -59,7 +59,7 @@ impl From<String> for File {
 
 impl serde::Serialize for File {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
+    where
         S: serde::Serializer,
     {
         match *self {

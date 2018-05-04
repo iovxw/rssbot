@@ -1,24 +1,24 @@
 //! This is the actual Bot module. For ergonomic reasons there is a RcBot which composes the real
 //! bot as an underlying field. You should always use RcBot.
 
-use objects;
 use error::Error;
+use objects;
 
-use std::str;
-use std::time::Duration;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::{RefCell, Cell};
+use std::str;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use curl::easy::{Easy, List};
-use tokio_curl::Session;
-use tokio_core::reactor::{Handle, Interval};
-use serde::de::DeserializeOwned;
-use serde_json;
-use futures::{Future, IntoFuture, Stream, stream};
 use futures::sync::mpsc;
 use futures::sync::mpsc::UnboundedSender;
+use futures::{stream, Future, IntoFuture, Stream};
+use serde::de::DeserializeOwned;
+use serde_json;
+use tokio_core::reactor::{Handle, Interval};
+use tokio_curl::Session;
 
 /// A clonable, single threaded bot
 ///
@@ -31,7 +31,9 @@ pub struct RcBot {
 impl RcBot {
     pub fn new<'a>(handle: Handle, key: &str) -> impl Future<Item = RcBot, Error = Error> + 'a {
         use functions::FunctionGetMe;
-        let bot = RcBot { inner: Rc::new(Bot::new(handle, key)) };
+        let bot = RcBot {
+            inner: Rc::new(Bot::new(handle, key)),
+        };
         bot.get_me().send().map(|(mut bot, me)| {
             Rc::get_mut(&mut bot.inner).as_mut().unwrap().id = me.id;
             Rc::get_mut(&mut bot.inner).as_mut().unwrap().username = me.username.unwrap();
@@ -97,8 +99,7 @@ impl Bot {
 
         req.url(&format!(
             "https://api.telegram.org/bot{}/{}",
-            self.key,
-            func
+            self.key, func
         )).unwrap();
 
         let r2 = result.clone();
@@ -107,8 +108,10 @@ impl Bot {
             Ok(data.len())
         }).unwrap();
 
-        self.session.perform(req).map_err(|e| e.into()).and_then(
-            move |_| {
+        self.session
+            .perform(req)
+            .map_err(|e| e.into())
+            .and_then(move |_| {
                 let response = result.lock().unwrap();
                 let response = str::from_utf8(&response).unwrap();
                 let response: Response<T> = serde_json::from_str(&response)?;
@@ -121,8 +124,7 @@ impl Bot {
                         response.parameters,
                     ))
                 }
-            },
-        )
+            })
     }
 }
 
@@ -207,8 +209,8 @@ impl RcBot {
                         let mut content = text.split_whitespace();
                         if let Some(cmd) = content.next() {
                             let s: Vec<&str> = cmd.split("@").take(2).collect();
-                            if s.len() > 0 && (s.len() < 2 || s[1] == self.inner.username) &&
-                                self.inner.handlers.borrow().contains_key(s[0])
+                            if s.len() > 0 && (s.len() < 2 || s[1] == self.inner.username)
+                                && self.inner.handlers.borrow().contains_key(s[0])
                             {
                                 message.text = Some(content.collect::<Vec<&str>>().join(" "));
 
@@ -220,7 +222,9 @@ impl RcBot {
 
                 if let Some(cmd) = forward {
                     if let Some(sender) = self.inner.handlers.borrow_mut().get_mut(&cmd) {
-                        sender.unbounded_send((self.clone(), val.message.unwrap())).unwrap();
+                        sender
+                            .unbounded_send((self.clone(), val.message.unwrap()))
+                            .unwrap();
                     }
                     return None;
                 } else {

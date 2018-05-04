@@ -1,9 +1,9 @@
 use std::time::Duration;
 
+use futures::prelude::*;
 use telebot;
 use telebot::functions::*;
-use tokio_core::reactor::{Interval, Handle};
-use futures::prelude::*;
+use tokio_core::reactor::{Handle, Interval};
 
 use data;
 use utlis::chat_is_unavailable;

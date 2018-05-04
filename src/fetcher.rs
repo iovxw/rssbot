@@ -1,18 +1,17 @@
-use std::time::Duration;
 use std::collections::HashMap;
+use std::time::Duration;
 
+use futures::prelude::*;
+use regex::Regex;
 use telebot;
 use telebot::functions::*;
 use tokio_core::reactor::{Interval, Timeout};
-use futures::prelude::*;
 use tokio_curl::Session;
-use regex::Regex;
 
 use data;
 use feed;
-use utlis::{Escape, EscapeUrl, send_multiple_messages, format_and_split_msgs,
-            to_chinese_error_msg, truncate_message, chat_is_unavailable, gen_ua,
-            TELEGRAM_MAX_MSG_LEN};
+use utlis::{chat_is_unavailable, format_and_split_msgs, gen_ua, send_multiple_messages,
+            to_chinese_error_msg, truncate_message, Escape, EscapeUrl, TELEGRAM_MAX_MSG_LEN};
 
 lazy_static!{
     // it's different from `feed::HOST`, so maybe need a better name?
@@ -22,8 +21,7 @@ lazy_static!{
 pub fn spawn_fetcher(bot: telebot::RcBot, db: data::Database, period: u64) {
     let handle = bot.inner.handle.clone();
     let handle2 = handle.clone();
-    let lop =
-        async_block! {
+    let lop = async_block! {
         #[async]
         for _ in Interval::new(Duration::from_secs(period), &handle)
             .expect("failed to start feed loop")
@@ -71,10 +69,8 @@ fn grouping_by_host(feeds: Vec<data::Feed>) -> Vec<Vec<data::Feed>> {
 }
 
 fn get_host(url: &str) -> &str {
-    HOST.captures(url).map_or(
-        url,
-        |r| r.get(0).unwrap().as_str(),
-    )
+    HOST.captures(url)
+        .map_or(url, |r| r.get(0).unwrap().as_str())
 }
 
 #[async]
@@ -143,12 +139,14 @@ fn fetch_feed_updates(
         format!("<b>{}</b>", Escape(&rss_title)),
         &updates,
         move |item| {
-            let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_else(
-                || &rss_title,
-            );
-            let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_else(
-                || &rss_link,
-            );
+            let title = item.title
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_else(|| &rss_title);
+            let link = item.link
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_else(|| &rss_link);
             format!(
                 "<a href=\"{}\">{}</a>",
                 EscapeUrl(link),

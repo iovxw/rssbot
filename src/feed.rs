@@ -1,17 +1,17 @@
 use std;
+use std::borrow::Cow;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use std::borrow::Cow;
 
 use curl::easy::Easy;
 use futures::prelude::*;
-use tokio_curl::Session;
+use quick_xml::events::attributes::Attributes;
 use quick_xml::events::BytesStart;
 use quick_xml::events::Event as XmlEvent;
-use quick_xml::events::attributes::Attributes;
 use quick_xml::reader::Reader as XmlReader;
 use regex::Regex;
+use tokio_curl::Session;
 
 use errors::*;
 
@@ -42,15 +42,17 @@ fn parse_atom_link<'a, B: std::io::BufRead>(
             _ => (),
         }
     }
-    Ok(href.map(move |href| if let Some(rel) = rel {
-        match &*rel {
-            "alternate" => AtomLink::Alternate(href),
-            "self" => AtomLink::Source(href),
-            "hub" => AtomLink::Hub(href),
-            _ => AtomLink::Other(href, rel),
+    Ok(href.map(move |href| {
+        if let Some(rel) = rel {
+            match &*rel {
+                "alternate" => AtomLink::Alternate(href),
+                "self" => AtomLink::Source(href),
+                "hub" => AtomLink::Hub(href),
+                _ => AtomLink::Other(href, rel),
+            }
+        } else {
+            AtomLink::Alternate(href)
         }
-    } else {
-        AtomLink::Alternate(href)
     }))
 }
 
@@ -61,8 +63,7 @@ fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
             Ok(XmlEvent::Start(_)) => {
                 skip_element(reader)?;
             }
-            Ok(XmlEvent::End(_)) |
-            Ok(XmlEvent::Eof) => break,
+            Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
             Err(err) => return Err(err.into()),
             _ => (),
         }
@@ -87,8 +88,7 @@ fn try_parse_text<'a, B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<
                 let text = reader.decode(e).to_string();
                 content = Some(text);
             }
-            Ok(XmlEvent::End(_)) |
-            Ok(XmlEvent::Eof) => break,
+            Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
             Err(err) => return Err(err.into()),
             _ => (),
         }
@@ -155,8 +155,7 @@ impl FromXml for RSS {
                         _ => skip_element(reader)?,
                     }
                 }
-                Ok(XmlEvent::End(_)) |
-                Ok(XmlEvent::Eof) => break,
+                Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
                 Err(err) => return Err(err.into()),
                 _ => (),
             }
@@ -213,8 +212,7 @@ impl FromXml for Item {
                         _ => skip_element(reader)?,
                     }
                 }
-                Ok(XmlEvent::End(_)) |
-                Ok(XmlEvent::Eof) => break,
+                Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
                 Err(err) => return Err(err.into()),
                 _ => (),
             }
@@ -230,15 +228,13 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
     let mut buf = Vec::new();
     loop {
         match reader.read_event(&mut buf) {
-            Ok(XmlEvent::Start(ref e)) => {
-                match reader.decode(e.name()).as_ref() {
-                    "rss" => continue,
-                    "channel" | "feed" | "rdf:RDF" => {
-                        return RSS::from_xml(&mut reader, e);
-                    }
-                    _ => skip_element(&mut reader)?,
+            Ok(XmlEvent::Start(ref e)) => match reader.decode(e.name()).as_ref() {
+                "rss" => continue,
+                "channel" | "feed" | "rdf:RDF" => {
+                    return RSS::from_xml(&mut reader, e);
                 }
-            }
+                _ => skip_element(&mut reader)?,
+            },
             Ok(XmlEvent::Eof) => return Err(ErrorKind::EOF.into()),
             Err(err) => return Err(err.into()),
             _ => (),
@@ -267,9 +263,8 @@ fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     lazy_static! {
         static ref HOST: Regex = Regex::new(r"^(https?://[^/]+)").unwrap();
     }
-    let rss_host = HOST.captures(rss_link).map_or(rss_link, |r| {
-        r.get(0).unwrap().as_str()
-    });
+    let rss_host = HOST.captures(rss_link)
+        .map_or(rss_link, |r| r.get(0).unwrap().as_str());
     match rss.link.as_str() {
         "" | "/" => rss.link = rss_host.to_owned(),
         _ => set_url_relative_to_absolute(&mut rss.link, rss_host),

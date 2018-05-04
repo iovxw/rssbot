@@ -1,10 +1,10 @@
 use std::io::Cursor;
 use std::io::Write;
 
-use quick_xml::writer::Writer;
-use quick_xml::events::{Event, BytesEnd, BytesStart, BytesDecl, BytesText};
-use quick_xml::events::attributes::Attribute;
 use chrono::Local;
+use quick_xml::events::attributes::Attribute;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::writer::Writer;
 
 use data::Feed;
 use errors::*;
@@ -40,7 +40,7 @@ pub fn to_opml(feeds: Vec<Feed>) -> String {
             })?;
             with_tag(writer, b"body", &mut [], move |writer| {
                 for feed in feeds {
-                    let mut outline = BytesStart::borrowed(b"outline",7);
+                    let mut outline = BytesStart::borrowed(b"outline", 7);
                     outline.push_attribute(Attribute::from(("type", "rss")));
                     outline.push_attribute(Attribute::from(("text", feed.title.as_str())));
                     outline.push_attribute(Attribute::from(("xmlUrl", feed.link.as_str())));
