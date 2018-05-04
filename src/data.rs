@@ -161,6 +161,16 @@ impl DatabaseInner {
             .unwrap_or_default();
     }
 
+    fn update_subscriber(&mut self, from: SubscriberID, to: SubscriberID) {
+        let feeds = self.subscribers.remove(&from).unwrap();
+        for feed_id in &feeds {
+            let feed = self.feeds.get_mut(&feed_id).unwrap();
+            feed.subscribers.remove(&from);
+            feed.subscribers.insert(to);
+        }
+        self.subscribers.insert(to, feeds);
+    }
+
     fn update(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
         let feed_id = get_hash(&rss_link);
         if self.feeds.get(&feed_id).is_none() {
@@ -323,6 +333,10 @@ impl Database {
 
     pub fn delete_subscriber(&self, subscriber: SubscriberID) {
         self.inner.borrow_mut().delete_subscriber(subscriber);
+    }
+
+    pub fn update_subscriber(&self, from: SubscriberID, to: SubscriberID) {
+        self.inner.borrow_mut().update_subscriber(from, to);
     }
 
     pub fn update(&self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {

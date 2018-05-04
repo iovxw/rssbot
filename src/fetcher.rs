@@ -5,6 +5,7 @@ use futures::prelude::*;
 use regex::Regex;
 use telebot;
 use telebot::functions::*;
+use telebot::objects::ResponseParameters;
 use tokio_core::reactor::{Interval, Timeout};
 use tokio_curl::Session;
 
@@ -80,6 +81,7 @@ fn fetch_feed_updates(
     session: Session,
     feed: data::Feed,
 ) -> Result<(), ()> {
+    let handle = bot.inner.handle.clone();
     let rss = match await!(feed::fetch_feed(
         session,
         gen_ua(&bot),
@@ -104,12 +106,29 @@ fn fetch_feed_updates(
                         .parse_mode("HTML")
                         .disable_web_page_preview(true)
                         .send();
-                    if let Err(e) = await!(m) {
-                        if chat_is_unavailable(&e) {
+                    match await!(m) {
+                        Err(telebot::Error::Telegram(_, ref s, None)) if chat_is_unavailable(s) => {
                             db.delete_subscriber(subscriber);
-                        } else {
-                            warn!("failed to send error to {}, {:?}", subscriber, e);
                         }
+                        Err(telebot::Error::Telegram(
+                            _,
+                            _,
+                            Some(ResponseParameters {
+                                migrate_to_chat_id: Some(new_id),
+                                ..
+                            }),
+                        )) => {
+                            db.update_subscriber(subscriber, new_id);
+                            handle.spawn(
+                                bot.message(new_id, msg.clone())
+                                    .parse_mode("HTML")
+                                    .disable_web_page_preview(true)
+                                    .send()
+                                    .then(|_| Ok(())),
+                            );
+                        }
+                        Err(e) => warn!("failed to send error to {}, {:?}", subscriber, e),
+                        _ => (),
                     }
                 }
             }
@@ -156,15 +175,24 @@ fn fetch_feed_updates(
     );
 
     for subscriber in feed.subscribers {
-        let db = db.clone();
-        let bot = bot.clone();
         let r = send_multiple_messages(&bot, subscriber, msgs.clone());
-        if let Err(e) = await!(r) {
-            if chat_is_unavailable(&e) {
+        match await!(r) {
+            Err(telebot::Error::Telegram(_, ref s, None)) if chat_is_unavailable(s) => {
                 db.delete_subscriber(subscriber);
-            } else {
-                warn!("failed to send updates to {}, {:?}", subscriber, e);
             }
+            Err(telebot::Error::Telegram(
+                _,
+                _,
+                Some(ResponseParameters {
+                    migrate_to_chat_id: Some(new_id),
+                    ..
+                }),
+            )) => {
+                db.update_subscriber(subscriber, new_id);
+                handle.spawn(send_multiple_messages(&bot, new_id, msgs.clone()).then(|_| Ok(())));
+            }
+            Err(e) => warn!("failed to send updates to {}, {:?}", subscriber, e),
+            _ => (),
         }
         if let Some(ref rss) = moved {
             // ignore error

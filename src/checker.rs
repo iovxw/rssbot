@@ -40,11 +40,21 @@ pub fn spawn_subscriber_alive_checker(bot: telebot::RcBot, db: data::Database, h
                 }
                 Ok(())
             }.or_else(move |(subscriber, e)| {
-                if chat_is_unavailable(&e) {
-                    db2.delete_subscriber(subscriber);
-                } else {
-                    warn!("checker {:?}", e);
-                }
+                match e {
+                    telebot::Error::Telegram(_, ref s, None) if chat_is_unavailable(s) => {
+                        db2.delete_subscriber(subscriber);
+                    }
+                    telebot::Error::Telegram(
+                        _,
+                        _,
+                        Some(telebot::objects::ResponseParameters {
+                            migrate_to_chat_id: Some(new_id),
+                            ..
+                        }),
+                        ) => {
+                        db2.update_subscriber(subscriber, new_id);
+                    }
+                    e => warn!("checker {:?}", e),}
                 Ok(())
             });
             handle.spawn(checker);

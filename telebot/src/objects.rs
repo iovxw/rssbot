@@ -115,6 +115,6 @@ pub struct ChatMember {
 /// Contains information about why a request was unsuccessfull.
 #[derive(Deserialize, Debug)]
 pub struct ResponseParameters {
-    migrate_to_chat_id: Option<Integer>,
-    retry_after: Option<Integer>,
+    pub migrate_to_chat_id: Option<Integer>,
+    pub retry_after: Option<Integer>,
 }

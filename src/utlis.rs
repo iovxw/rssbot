@@ -127,16 +127,8 @@ pub fn to_chinese_error_msg(e: errors::Error) -> String {
     }
 }
 
-pub fn chat_is_unavailable(e: &telebot::error::Error) -> bool {
-    match *e {
-        telebot::error::Error::Telegram(_, ref s, _)
-            if s.contains("Forbidden") || s.contains("chat not found")
-                || s.contains("group chat was migrated to a supergroup chat") =>
-        {
-            true
-        }
-        _ => false,
-    }
+pub fn chat_is_unavailable(s: &str) -> bool {
+    s.contains("Forbidden") || s.contains("chat not found")
 }
 
 pub fn log_error(e: &errors::Error) {
