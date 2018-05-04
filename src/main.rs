@@ -1,4 +1,5 @@
-#![feature(proc_macro, generators)]
+#![feature(proc_macro, generators, proc_macro_non_items)]
+
 
 #[macro_use]
 extern crate log;
