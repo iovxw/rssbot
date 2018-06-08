@@ -21,6 +21,13 @@
     /unsubthis - 使用此命令回复想要退订的 RSS 消息即可退订, 不支持 Channel
     /export    - 导出为 OPML
 
+## 一键安装
+
+```bash
+# Debian 8 or higher
+bash <(wget https://raw.githubusercontent.com/iovxw/rssbot/master/rssbot.sh -O -)
+```
+
 ## 下载
 
 可直接从 [Releases](https://github.com/iovxw/rssbot/releases) 下载预编译的程序, Linux 版本为 *musl* 静态链接, 无需其他依赖
