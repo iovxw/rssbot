@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::str;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use curl::easy::{Easy, List};
 use futures::sync::mpsc;
@@ -19,6 +19,9 @@ use serde::de::DeserializeOwned;
 use serde_json;
 use tokio_core::reactor::{Handle, Interval};
 use tokio_curl::Session;
+
+
+const UPDATE_ID_EXPIRATION: Duration = Duration::from_secs(604800);
 
 /// A clonable, single threaded bot
 ///
@@ -47,6 +50,7 @@ pub struct Bot {
     pub key: String,
     pub handle: Handle,
     pub last_id: Cell<u32>,
+    pub timestamp: Cell<Instant>,
     pub update_interval: Cell<u64>,
     pub handlers: RefCell<HashMap<String, UnboundedSender<(RcBot, objects::Message)>>>,
     pub session: Session,
@@ -60,6 +64,7 @@ impl Bot {
             handle: handle.clone(),
             key: key.into(),
             last_id: Cell::new(0),
+            timestamp: Cell::new(Instant::now()),
             update_interval: Cell::new(1000),
             handlers: RefCell::new(HashMap::new()),
             session: Session::new(handle.clone()),
@@ -193,12 +198,15 @@ impl RcBot {
             })
             .map(|(_, x)| stream::iter_ok(x.0))
             .flatten()
-            .and_then(move |x| {
-                if self.inner.last_id.get() < x.update_id as u32 + 1 {
+            .filter(move |x| {
+                // If there are no new updates for at least a week, then update_id will be randomly.
+                let fresh_update_id = Instant::now().duration_since(self.inner.timestamp.get()) < UPDATE_ID_EXPIRATION;
+                let valid_update_id = self.inner.last_id.get() < x.update_id as u32 + 1;
+                if !fresh_update_id || valid_update_id {
+                    self.inner.timestamp.set(Instant::now());
                     self.inner.last_id.set(x.update_id as u32 + 1);
                 }
-
-                Ok(x)
+                !fresh_update_id || valid_update_id
             })
             .filter_map(move |mut val| {
                 debug!("Got an update from Telegram: {:?}", val);
