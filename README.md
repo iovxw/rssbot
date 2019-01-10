@@ -32,7 +32,7 @@
 先安装 *Rust Nightly* 以及 *Cargo* (推荐使用 [`rustup`](https://www.rustup.rs/)), 然后:
 
 ```
-cargo +nightly build --release
+cargo build --release
 ```
 
 编译好的文件位于: `./target/release/rssbot`
