@@ -1,6 +1,6 @@
 [package]
 name = "rssbot"
-version = "1.4.3"
+version = "1.4.4"
 authors = ["iovxw <iovxw@outlook.com>"]
 license = "Unlicense"
 readme = "README.md"
