@@ -1,0 +1,12 @@
+version: '3.5'
+services:
+
+  rssbot:
+      build: .
+      container_name: rssbot
+      restart: always
+      volumes:
+        - ./data:/app/data
+      environment:
+        - TELEGRAM_DATAFILE=/app/data/data.json
+        - TELEGRAM_BOT_TOKEN=token
