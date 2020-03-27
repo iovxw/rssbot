@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:content='http://purl.org/rss/1.0/modules/content/'
+         xmlns="http://purl.org/rss/1.0/">
+
+
+    <channel rdf:about="rss_1.0.channel.uri">
+        <title>rss_1.0.channel.title</title>
+        <link>rss_1.0.channel.link</link>
+        <description>rss_1.0.channel.description</description>
+        
+        <image rdf:resource="rss_1.0.channel.image^rdf:resource"/>
+
+        <items>
+            <rdf:Seq>
+                <rdf:li resource="rss_1.0.channel.items[0]^rdf:resource" />
+                <rdf:li resource="rss_1.0.channel.items[1]^rdf:resource" />
+            </rdf:Seq>
+        </items>
+    </channel>
+    
+    <image rdf:about="rss_1.0.channel.image^rdf:resource">
+        <title>rss_1.0.image.title</title>
+        <url>rss_1.0.image.url</url>
+        <link>rss_1.0.image.link</link>
+    </image>
+
+    <textinput>
+        <title>rss_1.0.textinput.title</title>
+        <description>rss_1.0.textinput.description</description>
+        <name>rss_1.0.textinput.name</name>
+        <link>rss_1.0.textinput.link</link>
+    </textinput>
+    <item rdf:about="rss_1.0.channel.items[0]^rdf:resource">
+        <title>rss_1.0.item[0].title</title>
+        <link>rss_1.0.item[0].link</link>
+        <description>rss_1.0.item[0].description</description>
+        <content:encoded>rss_1.0.item[0].content</content:encoded>
+    </item>
+    <item rdf:about="rss_1.0.channel.items[1]^rdf:resource">
+        <title>rss_1.0.item[1].title</title>
+        <link>rss_1.0.item[1].link</link>
+        <description>rss_1.0.item[1].description</description>
+        <content:encoded>rss_1.0.item[1].content</content:encoded>
+    </item>
+
+</rdf:RDF>
