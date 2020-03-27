@@ -137,13 +137,16 @@ mod handlers {
         } else {
             vec!["订阅列表为空".to_string()]
         };
+
+        let mut prev_msg = cmd.message_id;
         for msg in msgs {
             let text = parameters::Text::html(&msg);
-            cmd.bot
+            let msg = cmd.bot
                 .send_message(chat, text)
-                .reply_to_message_id(cmd.message_id)
+                .reply_to_message_id(prev_msg)
                 .call()
                 .await?;
+            prev_msg = msg.id;
         }
         Ok(())
     }
