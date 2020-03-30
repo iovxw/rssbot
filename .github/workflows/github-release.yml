@@ -10,15 +10,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@master
-    - uses: hecrj/setup-rust-action@v1
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Install Rust
+      uses: hecrj/setup-rust-action@v1
       with:
         rust-version: nightly-2020-03-20
+        targets: x86_64-unknown-linux-musl
     - name: Build
-      run: cargo build --release
+      run: cargo build --release --target=x86_64-unknown-linux-musl
     - name: Create Release
       id: create_release
-      uses: actions/create-release@latest
+      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -33,6 +36,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-        asset_path: ./target/release/rssbot
+        asset_path: ./target/x86_64-unknown-linux-musl/release/rssbot
         asset_name: rssbot-amd64-linux
         asset_content_type: application/x-elf
