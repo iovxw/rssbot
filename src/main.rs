@@ -1,3 +1,5 @@
+#![feature(backtrace)]
+
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -16,6 +18,7 @@ mod feed;
 use crate::data::Database;
 
 static BOT_NAME: OnceCell<String> = OnceCell::new();
+static BOT_ID: OnceCell<tbot::types::user::Id> = OnceCell::new();
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "A simple Telegram RSS bot.")]
@@ -35,7 +38,8 @@ macro_rules! handle {
             let future = f(env.clone(), cmd);
             async {
                 if let Err(e) = future.await {
-                    dbg!(e);
+                    dbg!(&e);
+                    dbg!(e.backtrace());
                 }
             }
         }
@@ -54,6 +58,7 @@ async fn main() -> anyhow::Result<()> {
         .context("Initialization failed, check your network and Telegram token")?;
 
     BOT_NAME.set(me.user.username.clone().unwrap()).unwrap();
+    BOT_ID.set(me.user.id).unwrap();
 
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
@@ -84,6 +89,26 @@ mod handlers {
     pub const TELEGRAM_MAX_MSG_LEN: usize = 4096;
     const RESP_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
+    #[derive(Debug, Copy, Clone)]
+    struct MsgTarget {
+        chat_id: tbot::types::chat::Id,
+        message_id: tbot::types::message::Id,
+        first_time: bool,
+    }
+
+    impl MsgTarget {
+        fn new(chat_id: tbot::types::chat::Id, message_id: tbot::types::message::Id) -> Self {
+            MsgTarget {
+                chat_id,
+                message_id,
+                first_time: false,
+            }
+        }
+        fn update(self, message_id: tbot::types::message::Id) -> Self {
+            MsgTarget { message_id, ..self }
+        }
+    }
+
     fn client() -> Arc<reqwest::Client> {
         static mut CLIENT: Option<Arc<reqwest::Client>> = None;
         static INIT: Once = Once::new();
@@ -104,7 +129,7 @@ mod handlers {
                 reqwest::header::HeaderValue::from_str(&ua).unwrap(),
             );
             let client = reqwest::Client::builder()
-                .timeout(Duration::from_secs(5))
+                .timeout(Duration::from_secs(10))
                 .default_headers(headers)
                 .redirect(reqwest::redirect::Policy::limited(5))
                 .build()
@@ -122,10 +147,26 @@ mod handlers {
         db: Arc<Mutex<Database>>,
         cmd: Arc<Command<Text<Https>>>,
     ) -> anyhow::Result<()> {
-        let chat = cmd.chat.id;
-        let text = &cmd.text.value;
+        let chat_id = cmd.chat.id;
+        let channel = &cmd.text.value;
+        let mut target_id = chat_id;
 
-        let feeds = db.lock().unwrap().subscribed_feeds(chat.0);
+        if !channel.is_empty() {
+        let user_id = cmd.from.as_ref().unwrap().id;
+        let channel_id = check_channel_permission(
+            &cmd.bot,
+            channel,
+            MsgTarget::new(chat_id, cmd.message_id),
+            user_id,
+        )
+            .await?;
+        if channel_id.is_none() {
+            return Ok(());
+        }
+        target_id = channel_id.unwrap();
+        }
+
+        let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
         let msgs = if let Some(feeds) = feeds {
             format_and_split_msgs("订阅列表：".to_string(), &feeds, |feed| {
                 format!(
@@ -141,8 +182,9 @@ mod handlers {
         let mut prev_msg = cmd.message_id;
         for msg in msgs {
             let text = parameters::Text::html(&msg);
-            let msg = cmd.bot
-                .send_message(chat, text)
+            let msg = cmd
+                .bot
+                .send_message(chat_id, text)
                 .reply_to_message_id(prev_msg)
                 .call()
                 .await?;
@@ -164,8 +206,18 @@ mod handlers {
         match &*args {
             [url] => feed_url = url,
             [channel, url] => {
-                //...
-                target_id = todo!();
+                let user_id = cmd.from.as_ref().unwrap().id;
+                let channel_id = check_channel_permission(
+                    &cmd.bot,
+                    channel,
+                    MsgTarget::new(chat_id, cmd.message_id),
+                    user_id,
+                )
+                .await?;
+                if channel_id.is_none() {
+                    return Ok(());
+                }
+                target_id = channel_id.unwrap();
                 feed_url = url;
             }
             [..] => {
@@ -178,13 +230,14 @@ mod handlers {
                 Err(DataError::Subscribed) => "".into(),
                 Err(e) => unreachable!(e),
             },
-            Err(e) => format!("订阅失败 {}", e),
+            Err(e) => format!("订阅失败 {}", Escape(&e.to_string())),
         };
-        cmd.bot
-            .send_message(chat_id, text)
-            .reply_to_message_id(cmd.message_id)
-            .call()
-            .await?;
+        update_response(
+            &cmd.bot,
+            MsgTarget::new(chat_id, cmd.message_id),
+            parameters::Text::html(&msg),
+        )
+        .await?;
         Ok(())
     }
 
@@ -204,6 +257,76 @@ mod handlers {
         }
 
         crate::feed::parse(std::io::Cursor::new(buf))
+    }
+
+    async fn update_response(
+        bot: &tbot::Bot<Https>,
+        target: MsgTarget,
+        message: parameters::Text<'_>,
+    ) -> Result<MsgTarget, tbot::errors::MethodCall> {
+        let msg = if target.first_time {
+            bot.send_message(target.chat_id, message)
+                .reply_to_message_id(target.message_id)
+                .call()
+                .await?
+        } else {
+            bot.edit_message_text(target.chat_id, target.message_id, message)
+                .call()
+                .await?
+        };
+        Ok(target.update(msg.id))
+    }
+
+    async fn check_channel_permission(
+        bot: &tbot::Bot<Https>,
+        channel: &str,
+        target: MsgTarget,
+        user_id: tbot::types::user::Id,
+    ) -> Result<Option<tbot::types::chat::Id>, tbot::errors::MethodCall> {
+        let channel_id = channel
+            .parse::<i64>()
+            .map(|id| parameters::ChatId::Id(id.into()))
+            .unwrap_or_else(|_| {
+                if channel.starts_with('@') {
+                    parameters::ChatId::Username(&channel[1..])
+                } else {
+                    parameters::ChatId::Username(channel)
+                }
+            });
+
+        let chat = bot.get_chat(channel_id).call().await?;
+        if !chat.kind.is_channel() {
+            update_response(bot, target, parameters::Text::plain("目标需为 Channel")).await?;
+            return Ok(None);
+        }
+        let admins = bot.get_chat_administrators(channel_id).call().await?;
+        let user_is_admin = admins
+            .iter()
+            .find(|member| member.user.id == user_id)
+            .is_some();
+        if !user_is_admin {
+            update_response(
+                bot,
+                target,
+                parameters::Text::plain("该命令只能由 Channel 管理员使用"),
+            )
+            .await?;
+            return Ok(None);
+        }
+        let bot_is_admin = admins
+            .iter()
+            .find(|member| member.user.id == *crate::BOT_ID.get().unwrap())
+            .is_some();
+        if !bot_is_admin {
+            update_response(
+                bot,
+                target,
+                parameters::Text::plain("请将本 Bot 设为管理员"),
+            )
+            .await?;
+            return Ok(None);
+        }
+        Ok(Some(chat.id))
     }
 
     pub fn format_and_split_msgs<T, F>(head: String, data: &[T], line_format_fn: F) -> Vec<String>
