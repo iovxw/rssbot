@@ -1,0 +1,24 @@
+name: Publish Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: nightly
+    - uses: actions/checkout@master
+    - name: Build
+      run: cargo build --release
+    - name: Upload release
+      uses: yakuhzi/action-release@v1
+      with:
+        file: ./target/release/rssbot
+        # changelog: /path/to/CHANGELOG.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
