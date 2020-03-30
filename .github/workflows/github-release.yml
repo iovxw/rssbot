@@ -7,11 +7,13 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-16.04
 
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+    - name: Install Musl
+      run: sudo apt install -y musl-tools
     - name: Install Rust
       uses: hecrj/setup-rust-action@v1
       with:
