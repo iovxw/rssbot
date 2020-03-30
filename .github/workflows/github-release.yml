@@ -1,24 +1,38 @@
 name: Publish Release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@master
     - uses: hecrj/setup-rust-action@v1
       with:
         rust-version: nightly-2020-03-20
-    - uses: actions/checkout@master
     - name: Build
       run: cargo build --release
-    - name: Upload release
-      uses: yakuhzi/action-release@v1
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        file: ./target/release/rssbot
-        # changelog: /path/to/CHANGELOG.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+        asset_path: ./target/release/rssbot
+        asset_name: rssbot-amd64-linux
+        asset_content_type: application/x-elf
