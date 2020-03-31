@@ -35,7 +35,11 @@ impl MsgTarget {
         }
     }
     fn update(self, message_id: tbot::types::message::Id) -> Self {
-        MsgTarget { message_id, ..self }
+        MsgTarget {
+            message_id,
+            first_time: false,
+            ..self
+        }
     }
 }
 
@@ -148,6 +152,12 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
             return Ok(());
         }
     };
+    let resp_ctx = update_response(
+        &cmd.bot,
+        MsgTarget::new(chat_id, cmd.message_id),
+        parameters::Text::plain("处理中，请稍候"),
+    )
+    .await?;
     let msg = match pull_feed(feed_url).await {
         Ok(feed) => {
             if db.lock().unwrap().subscribe(target_id.0, feed_url, &feed) {
@@ -158,12 +168,7 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
         }
         Err(e) => format!("订阅失败 {}", Escape(&e.to_string())),
     };
-    update_response(
-        &cmd.bot,
-        MsgTarget::new(chat_id, cmd.message_id),
-        parameters::Text::html(&msg),
-    )
-    .await?;
+    update_response(&cmd.bot, resp_ctx, parameters::Text::html(&msg)).await?;
     Ok(())
 }
 
@@ -225,7 +230,7 @@ pub async fn export(
             MsgTarget::new(chat_id, cmd.message_id),
             user_id,
         )
-            .await?;
+        .await?;
         if channel_id.is_none() {
             return Ok(());
         }
@@ -239,18 +244,19 @@ pub async fn export(
             MsgTarget::new(chat_id, cmd.message_id),
             parameters::Text::plain("订阅列表为空"),
         )
-            .await?;
+        .await?;
         return Ok(());
     }
     let opml = opml::into_opml(feeds.unwrap());
 
-    cmd.bot.send_document(
-        chat_id,
-        input_file::Document::bytes("feeds.opml", opml.as_bytes()),
-    )
-           .reply_to_message_id(cmd.message_id)
-           .call()
-           .await?;
+    cmd.bot
+        .send_document(
+            chat_id,
+            input_file::Document::bytes("feeds.opml", opml.as_bytes()),
+        )
+        .reply_to_message_id(cmd.message_id)
+        .call()
+        .await?;
     Ok(())
 }
 
