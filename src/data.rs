@@ -12,10 +12,6 @@ use crate::feed;
 
 #[derive(Error, Debug)]
 pub enum DataError {
-    #[error("already subscribed")]
-    Subscribed,
-    #[error("not subscribed")]
-    NotSubscribed,
     #[error("io error")]
     Io(#[from] std::io::Error),
     #[error("json error")]
@@ -134,12 +130,7 @@ impl Database {
             .unwrap_or(false)
     }
 
-    pub fn subscribe(
-        &mut self,
-        subscriber: SubscriberID,
-        rss_link: &str,
-        rss: &feed::RSS,
-    ) -> Result<(), DataError> {
+    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &feed::RSS) -> bool {
         let feed_id = gen_hash(&rss_link);
         {
             let subscribed_feeds = self
@@ -147,7 +138,7 @@ impl Database {
                 .entry(subscriber)
                 .or_insert_with(HashSet::new);
             if !subscribed_feeds.insert(feed_id) {
-                return Err(DataError::Subscribed);
+                return false;
             }
         }
         {
@@ -160,14 +151,11 @@ impl Database {
             });
             feed.subscribers.insert(subscriber);
         }
-        self.save()
+        self.save().unwrap_or_default();
+        true
     }
 
-    pub fn unsubscribe(
-        &mut self,
-        subscriber: SubscriberID,
-        rss_link: &str,
-    ) -> Result<Feed, DataError> {
+    pub fn unsubscribe(&mut self, subscriber: SubscriberID, rss_link: &str) -> Option<Feed> {
         let feed_id = gen_hash(&rss_link);
 
         let clear_subscriber;
@@ -175,10 +163,10 @@ impl Database {
             if subscribed_feeds.remove(&feed_id) {
                 clear_subscriber = subscribed_feeds.is_empty();
             } else {
-                return Err(DataError::NotSubscribed);
+                return None;
             }
         } else {
-            return Err(DataError::NotSubscribed);
+            return None;
         }
         if clear_subscriber {
             self.subscribers.remove(&subscriber);
@@ -191,16 +179,16 @@ impl Database {
                 clear_feed = feed.subscribers.is_empty();
                 result = feed.clone();
             } else {
-                return Err(DataError::NotSubscribed);
+                return None;
             }
         } else {
-            return Err(DataError::NotSubscribed);
+            return None;
         };
         if clear_feed {
             self.feeds.remove(&feed_id);
         }
-        self.save()?;
-        Ok(result)
+        self.save().unwrap_or_default();
+        Some(result)
     }
 
     pub fn delete_subscriber(&mut self, subscriber: SubscriberID) {

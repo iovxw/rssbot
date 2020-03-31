@@ -4,12 +4,11 @@ use std::io::Write;
 use chrono::Local;
 use quick_xml::events::attributes::Attribute;
 use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::writer::Writer;
+use quick_xml::Writer;
 
-use data::Feed;
-use errors::*;
+use crate::data::Feed;
 
-pub fn to_opml(feeds: Vec<Feed>) -> String {
+pub fn into_opml(feeds: Vec<Feed>) -> String {
     let mut writer = Writer::new(Cursor::new(Vec::new()));
     let decl = BytesDecl::new(b"1.0", Some(b"UTF-8"), None);
     writer.write_event(Event::Decl(decl)).unwrap();
@@ -21,19 +20,19 @@ pub fn to_opml(feeds: Vec<Feed>) -> String {
         |writer| {
             with_tag(writer, b"head", &mut [], |writer| {
                 with_tag(writer, b"title", &mut [], |writer| {
-                    let text = BytesText::borrowed(b"Exported from RSSBot");
+                    let text = BytesText::from_plain(b"Exported from RSSBot");
                     writer.write_event(Event::Text(text))?;
                     Ok(())
                 })?;
                 with_tag(writer, b"dateCreated", &mut [], |writer| {
                     // e.g. Thu, 02 Nov 2017 18:08:24 CST
-                    let time = Local::now().format("%a, %d %b %Y %T %Z");
-                    let text = BytesText::owned(time.to_string().into_bytes());
+                    let time = Local::now().format("%a, %d %b %Y %T %Z").to_string();
+                    let text = BytesText::from_plain_str(&time);
                     writer.write_event(Event::Text(text))?;
                     Ok(())
                 })?;
                 with_tag(writer, b"docs", &mut [], |writer| {
-                    let text = BytesText::borrowed(b"http://www.opml.org/spec2");
+                    let text = BytesText::from_plain(b"http://www.opml.org/spec2");
                     writer.write_event(Event::Text(text))?;
                     Ok(())
                 })
@@ -49,7 +48,8 @@ pub fn to_opml(feeds: Vec<Feed>) -> String {
                 Ok(())
             })
         },
-    ).unwrap();
+    )
+    .unwrap();
 
     unsafe { String::from_utf8_unchecked(writer.into_inner().into_inner()) }
 }
@@ -60,10 +60,10 @@ fn with_tag<'a, W, F>(
     tag: &[u8],
     attrs: &mut [Option<Attribute<'a>>],
     then: F,
-) -> Result<()>
+) -> quick_xml::Result<()>
 where
     W: Write,
-    F: FnOnce(&mut Writer<W>) -> Result<()>,
+    F: FnOnce(&mut Writer<W>) -> quick_xml::Result<()>,
 {
     let mut start = BytesStart::borrowed(tag, tag.len());
     for attr in attrs.iter_mut() {
@@ -100,5 +100,5 @@ fn test_to_opml() {
          </opml>",
         Local::now().format("%a, %d %b %Y %T %Z")
     );
-    assert_eq!(to_opml(feeds), r);
+    assert_eq!(into_opml(feeds), r);
 }
