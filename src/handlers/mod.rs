@@ -31,7 +31,7 @@ impl MsgTarget {
         MsgTarget {
             chat_id,
             message_id,
-            first_time: false,
+            first_time: true,
         }
     }
     fn update(self, message_id: tbot::types::message::Id) -> Self {
