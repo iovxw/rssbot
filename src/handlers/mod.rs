@@ -9,7 +9,7 @@ use tbot::{
     types::{input_file, parameters},
 };
 
-use crate::data::{ Database};
+use crate::data::Database;
 use crate::feed::RSS;
 
 mod opml;
@@ -273,7 +273,8 @@ async fn pull_feed(url: &str) -> anyhow::Result<RSS> {
         buf.extend_from_slice(&bytes);
     }
 
-    crate::feed::parse(std::io::Cursor::new(buf))
+    let feed = crate::feed::parse(std::io::Cursor::new(buf))?;
+    Ok(crate::feed::fix_relative_url(feed, url))
 }
 
 async fn update_response(
