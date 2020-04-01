@@ -8,11 +8,173 @@ use quick_xml::events::Event as XmlEvent;
 use quick_xml::Reader as XmlReader;
 use regex::Regex;
 
-use anyhow::Result;
+/*
+trait PullFn {
+    type Output;
+    fn pull<B>(
+        &mut self,
+        reader: &mut XmlReader<B>,
+        event: XmlEvent,
+    ) -> quick_xml::Result<Option<Self::Output>>
+    where
+        B: std::io::BufRead;
+}
+
+        enum InnerFn {
+            SkipElement(SkipElement),
+            ParseText(ParseText),
+        }
+
+struct ParseRss {
+    output: RSS,
+    reading_rss_1_0_head: bool,
+    inner_fn: Option<InnerFn>,
+}
+
+impl PullFn for ParseRss {
+    type Output = RSS;
+    fn pull<B>(
+        &mut self,
+        reader: &mut XmlReader<B>,
+        event: XmlEvent,
+    ) -> quick_xml::Result<Option<Self::Output>>
+    where
+        B: std::io::BufRead,
+    {
+        if let Some(f) = &mut self.inner_fn {
+           return match f {
+                InnerFn::SkipElement(f) => f.pull(reader, event),
+            };
+        }
+        match event {
+            XmlEvent::Empty(ref e) => {
+                if reader.decode(e.local_name())? == "link" {
+                    match parse_atom_link(reader, e.attributes())? {
+                        Some(AtomLink::Alternate(link)) => self.output.link = link,
+                        Some(AtomLink::Source(link)) => self.output.source = Some(link),
+                        _ => {}
+                    }
+                }
+            }
+            XmlEvent::Start(ref e) => {
+                match reader.decode(e.local_name())? {
+                    "channel" => {
+                        // RSS 0.9 1.0
+                        self.reading_rss_1_0_head = true;
+                    }
+                    "title" => {
+                        if let Some(title) = try_parse_text(reader)? {
+                            self.output.title = title;
+                        }
+                    }
+                    "link" => {
+                        if let Some(link) = try_parse_text(reader)? {
+                            // RSS
+                            self.output.link = link;
+                        } else {
+                            // ATOM
+                            match parse_atom_link(reader, e.attributes())? {
+                                Some(AtomLink::Alternate(link)) => self.output.link = link,
+                                Some(AtomLink::Source(link)) => self.output.source = Some(link),
+                                _ => {}
+                            }
+                        }
+                    }
+                    "item" | "entry" => {
+                        self.output.items.push(Item::from_xml(reader, e)?);
+                    }
+                    // skip this element
+                    _ => (),
+                }
+            }
+            XmlEvent::End(_) if self.reading_rss_1_0_head => {
+                // reader.decode(e.local_name())? == "channel";
+                self.reading_rss_1_0_head = false;
+            }
+            XmlEvent::End(_) | XmlEvent::Eof => {
+                return Ok(PullFnCmd::Done(std::mem::replace(
+                    &mut self.output,
+                    Default::default(),
+                )))
+            }
+            _ => (),
+        }
+        Ok(PullFnCmd::Continue)
+    }
+}
+
+struct ParseText {}
+
+impl PullFn for ParseText {
+    type Output = Option<String>;
+    fn pull<B>(
+        &mut self,
+        reader: &mut XmlReader<B>,
+        event: XmlEvent,
+    ) -> quick_xml::Result<PullFnCmd<Self::Output>>
+    where
+        B: std::io::BufRead,
+    {
+        match event {
+            XmlEvent::Start(_) => {
+                skip_element(reader)?;
+            }
+            XmlEvent::Text(ref e) => {
+                let text = e.unescape_and_decode(reader)?;
+                return Ok(PullFnCmd::Done(Some(text)));
+            }
+            XmlEvent::CData(ref e) => {
+                let text = reader.decode(e)?.to_string();
+                return Ok(PullFnCmd::Done(Some(text)));
+            }
+            XmlEvent::End(_) | XmlEvent::Eof => return Ok(PullFnCmd::Done(None)),
+            _ => (),
+        }
+        Ok(PullFnCmd::Continue)
+    }
+}
+
+struct SkipElement {
+    depth: usize,
+}
+
+impl SkipElement {
+    fn new() -> Self {
+        SkipElement { depth: 1 }
+    }
+}
+
+impl PullFn for SkipElement {
+    type Output = ();
+    fn pull<B>(
+        &mut self,
+        _reader: &mut XmlReader<B>,
+        event: XmlEvent,
+    ) -> quick_xml::Result<PullFnCmd<Self::Output>>
+    where
+        B: std::io::BufRead,
+    {
+        match event {
+            XmlEvent::Start(_) => {
+                self.depth = self.depth.checked_add(1).unwrap();
+            }
+            XmlEvent::End(_) => {
+                self.depth = self.depth.checked_sub(1).unwrap();
+            }
+            XmlEvent::Eof => return Ok(PullFnCmd::Done(())), // ignore unexpected EOF
+            _ if self.depth == 0 => return Ok(PullFnCmd::Done(())),
+            _ => (),
+        }
+        Ok(PullFnCmd::Continue)
+    }
+}*/
 
 pub trait FromXml: Sized {
-    fn from_xml<B: std::io::BufRead>(reader: &mut XmlReader<B>, start: &BytesStart)
-        -> Result<Self>;
+    fn from_xml<B: std::io::BufRead>(
+        bufs: &mut Vec<Vec<u8>>,
+        reader: &mut XmlReader<B>,
+        start: &BytesStart,
+    ) -> quick_xml::Result<Self>;
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -26,7 +188,7 @@ enum AtomLink<'a> {
 fn parse_atom_link<'a, B: std::io::BufRead>(
     reader: &mut XmlReader<B>,
     attributes: Attributes<'a>,
-) -> Result<Option<AtomLink<'a>>> {
+) -> quick_xml::Result<Option<AtomLink<'a>>> {
     let mut href = None;
     let mut rel = None;
     for attribute in attributes {
@@ -59,45 +221,62 @@ fn parse_atom_link<'a, B: std::io::BufRead>(
     }))
 }
 
-fn skip_element<B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<()> {
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(XmlEvent::Start(_)) => {
-                skip_element(reader)?;
+struct SkipThisElement;
+
+impl FromXml for SkipThisElement {
+    fn from_xml<B: std::io::BufRead>(
+        bufs: &mut Vec<Vec<u8>>,
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> quick_xml::Result<Self> {
+        let mut buf = bufs.pop().unwrap_or_default();
+        let mut depth = 1u64;
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(_)) => depth += 1,
+                Ok(XmlEvent::End(_)) if depth == 1 => break,
+                Ok(XmlEvent::End(_)) => depth -= 1,
+                Ok(XmlEvent::Eof) => break, // just ignore EOF
+                Err(err) => return Err(err.into()),
+                _ => (),
             }
-            Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
-            Err(err) => return Err(err.into()),
-            _ => (),
+            buf.clear();
         }
-        buf.clear();
+        bufs.push(buf);
+        Ok(SkipThisElement)
     }
-    Ok(())
 }
 
-fn try_parse_text<'a, B: std::io::BufRead>(reader: &mut XmlReader<B>) -> Result<Option<String>> {
-    let mut buf = Vec::new();
-    let mut content: Option<String> = None;
-    loop {
-        match reader.read_event(&mut buf) {
-            Ok(XmlEvent::Start(_)) => {
-                skip_element(reader)?;
+impl FromXml for Option<String> {
+    fn from_xml<B: std::io::BufRead>(
+        bufs: &mut Vec<Vec<u8>>,
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> quick_xml::Result<Self> {
+        let mut buf = bufs.pop().unwrap_or_default();
+        let mut content: Option<String> = None;
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(ref e)) => {
+                    SkipThisElement::from_xml(bufs, reader, e)?;
+                }
+                Ok(XmlEvent::Text(ref e)) => {
+                    let text = e.unescape_and_decode(reader)?;
+                    content = Some(text);
+                }
+                Ok(XmlEvent::CData(ref e)) => {
+                    let text = reader.decode(e)?.to_string();
+                    content = Some(text);
+                }
+                Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
+                Err(err) => return Err(err.into()),
+                _ => (),
             }
-            Ok(XmlEvent::Text(ref e)) => {
-                let text = e.unescape_and_decode(reader)?;
-                content = Some(text);
-            }
-            Ok(XmlEvent::CData(ref e)) => {
-                let text = reader.decode(e)?.to_string();
-                content = Some(text);
-            }
-            Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
-            Err(err) => return Err(err.into()),
-            _ => (),
+            buf.clear();
         }
-        buf.clear();
+        bufs.push(buf);
+        Ok(content)
     }
-    Ok(content)
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -110,11 +289,13 @@ pub struct RSS {
 
 impl FromXml for RSS {
     fn from_xml<B: std::io::BufRead>(
+        bufs: &mut Vec<Vec<u8>>,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
-    ) -> Result<Self> {
-        let mut buf = Vec::new();
+    ) -> quick_xml::Result<Self> {
+        let mut buf = bufs.pop().unwrap_or_default();
         let mut rss = RSS::default();
+        let mut reading_rss_1_0_head = false;
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
@@ -130,17 +311,19 @@ impl FromXml for RSS {
                     match reader.decode(e.local_name())? {
                         "channel" => {
                             // RSS 0.9 1.0
-                            let rdf = RSS::from_xml(reader, e)?;
-                            rss.title = rdf.title;
-                            rss.link = rdf.link;
+                            reading_rss_1_0_head = true;
                         }
                         "title" => {
-                            if let Some(title) = try_parse_text(reader)? {
+                            if let Some(title) =
+                                <Option<String> as FromXml>::from_xml(bufs, reader, e)?
+                            {
                                 rss.title = title;
                             }
                         }
                         "link" => {
-                            if let Some(link) = try_parse_text(reader)? {
+                            if let Some(link) =
+                                <Option<String> as FromXml>::from_xml(bufs, reader, e)?
+                            {
                                 // RSS
                                 rss.link = link;
                             } else {
@@ -153,10 +336,16 @@ impl FromXml for RSS {
                             }
                         }
                         "item" | "entry" => {
-                            rss.items.push(Item::from_xml(reader, e)?);
+                            rss.items.push(Item::from_xml(bufs, reader, e)?);
                         }
-                        _ => skip_element(reader)?,
+                        _ => {
+                            SkipThisElement::from_xml(bufs, reader, e)?;
+                        }
                     }
+                }
+                Ok(XmlEvent::End(_)) if reading_rss_1_0_head => {
+                    // reader.decode(e.local_name())? == "channel";
+                    reading_rss_1_0_head = false;
                 }
                 Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
                 Err(err) => return Err(err.into()),
@@ -164,6 +353,7 @@ impl FromXml for RSS {
             }
             buf.clear();
         }
+        bufs.push(buf);
         Ok(rss)
     }
 }
@@ -177,10 +367,11 @@ pub struct Item {
 
 impl FromXml for Item {
     fn from_xml<B: std::io::BufRead>(
+        bufs: &mut Vec<Vec<u8>>,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
-    ) -> Result<Self> {
-        let mut buf = Vec::new();
+    ) -> quick_xml::Result<Self> {
+        let mut buf = bufs.pop().unwrap_or_default();
         let mut item = Item::default();
         loop {
             match reader.read_event(&mut buf) {
@@ -196,10 +387,12 @@ impl FromXml for Item {
                 Ok(XmlEvent::Start(ref e)) => {
                     match reader.decode(e.name())? {
                         "title" => {
-                            item.title = try_parse_text(reader)?;
+                            item.title = <Option<String> as FromXml>::from_xml(bufs, reader, e)?;
                         }
                         "link" => {
-                            if let Some(link) = try_parse_text(reader)? {
+                            if let Some(link) =
+                                <Option<String> as FromXml>::from_xml(bufs, reader, e)?
+                            {
                                 // RSS
                                 item.link = Some(link);
                             } else if let Some(AtomLink::Alternate(link)) =
@@ -210,9 +403,11 @@ impl FromXml for Item {
                             }
                         }
                         "id" | "guid" => {
-                            item.id = try_parse_text(reader)?;
+                            item.id = <Option<String> as FromXml>::from_xml(bufs, reader, e)?;
                         }
-                        _ => skip_element(reader)?,
+                        _ => {
+                            SkipThisElement::from_xml(bufs, reader, e)?;
+                        }
                     }
                 }
                 Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
@@ -221,24 +416,28 @@ impl FromXml for Item {
             }
             buf.clear();
         }
+        bufs.push(buf);
         Ok(item)
     }
 }
 
-pub fn parse<B: std::io::BufRead>(reader: B) -> Result<RSS> {
+pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<RSS> {
     let mut reader = XmlReader::from_reader(reader);
     reader.trim_text(true);
-    let mut buf = Vec::new();
+    let mut bufs = vec![Vec::with_capacity(512); 4];
+    let mut buf = bufs.pop().unwrap_or_default();
     loop {
         match reader.read_event(&mut buf) {
             Ok(XmlEvent::Start(ref e)) => match reader.decode(e.name())? {
                 "rss" => continue,
                 "channel" | "feed" | "rdf:RDF" => {
-                    return RSS::from_xml(&mut reader, e);
+                    return RSS::from_xml(&mut bufs, &mut reader, e);
                 }
-                _ => skip_element(&mut reader)?,
+                _ => {
+                    SkipThisElement::from_xml(&mut bufs, &mut reader, e)?;
+                }
             },
-            // Ok(XmlEvent::Eof) => return Err(ErrorKind::EOF.into()),
+            Ok(XmlEvent::Eof) => return Err(quick_xml::Error::UnexpectedEof("feed".to_string())),
             Err(err) => return Err(err.into()),
             _ => (),
         }
@@ -282,318 +481,292 @@ pub fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     rss
 }
 
-/*
-pub fn fetch_feed<'a>(
-    session: Session,
-    ua: String,
-    source: String,
-) -> impl Future<Item = RSS, Error = Error> + 'a {
-    fn is_vaild_link(link: &str) -> bool {
-        link.starts_with("http://") || link.starts_with("https://")
-    };
-    make_request(session, source, ua, 10).and_then(move |(body, mut source, response_code)| {
-        if response_code != 200 {
-            return Err(ErrorKind::Http(response_code).into());
-        }
-        let mut rss = parse(body.as_slice())?;
-        if rss == RSS::default() {
-            return Err(ErrorKind::EmptyFeed.into());
-        }
-        if !is_vaild_link(&source) {
-            source.insert_str(0, "http://");
-        }
-        if rss.source.is_none() || !is_vaild_link(rss.source.as_ref().unwrap()) {
-            rss.source = Some(source.clone());
-        }
-        Ok(fix_relative_url(rss, &source))
-    })
-}
-*/
-
-#[test]
-fn test_atom03() {
+#[cfg(test)]
+mod test {
     use std::io::Cursor;
-    let s = include_str!("../tests/data/atom_0.3.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "atom_0.3.feed.title".into(),
-            link: "atom_0.3.feed.link^href".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("atom_0.3.feed.entry[0].title".into()),
-                    link: Some("atom_0.3.feed.entry[0].link^href".into()),
-                    id: Some("atom_0.3.feed.entry[0]^id".into()),
-                },
-                Item {
-                    title: Some("atom_0.3.feed.entry[1].title".into()),
-                    link: Some("atom_0.3.feed.entry[1].link^href".into()),
-                    id: Some("atom_0.3.feed.entry[1]^id".into()),
-                },
-            ],
-        }
-    );
-}
 
-#[test]
-fn test_atom10() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/atom_1.0.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "atom_1.0.feed.title".into(),
-            link: "http://example.com/blog_plain".into(),
-            source: Some("http://example.com/blog/atom_1.0.xml".into()),
-            items: vec![
-                Item {
-                    title: Some("atom_1.0.feed.entry[0].title".into()),
-                    link: Some("http://example.com/blog/entry1_plain".into()),
-                    id: Some("atom_1.0.feed.entry[0]^id".into()),
-                },
-                Item {
-                    title: Some("atom_1.0.feed.entry[1].title".into()),
-                    link: Some("http://example.com/blog/entry2".into()),
-                    id: Some("atom_1.0.feed.entry[1]^id".into()),
-                },
-            ],
-        }
-    );
-}
+    use super::*;
 
-#[test]
-fn test_rss09() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_0.9.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_0.9.channel.title".into(),
-            link: "rss_0.9.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_0.9.item[0].title".into()),
-                    link: Some("rss_0.9.item[0].link".into()),
-                    id: None,
-                },
-                Item {
-                    title: Some("rss_0.9.item[1].title".into()),
-                    link: Some("rss_0.9.item[1].link".into()),
-                    id: None,
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn atom03() {
+        let s = include_str!("../tests/data/atom_0.3.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "atom_0.3.feed.title".into(),
+                link: "atom_0.3.feed.link^href".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("atom_0.3.feed.entry[0].title".into()),
+                        link: Some("atom_0.3.feed.entry[0].link^href".into()),
+                        id: Some("atom_0.3.feed.entry[0]^id".into()),
+                    },
+                    Item {
+                        title: Some("atom_0.3.feed.entry[1].title".into()),
+                        link: Some("atom_0.3.feed.entry[1].link^href".into()),
+                        id: Some("atom_0.3.feed.entry[1]^id".into()),
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss091() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_0.91.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_0.91.channel.title".into(),
-            link: "rss_0.91.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_0.91.channel.item[0].title".into()),
-                    link: Some("rss_0.91.channel.item[0].link".into()),
-                    id: None,
-                },
-                Item {
-                    title: Some("rss_0.91.channel.item[1].title".into()),
-                    link: Some("rss_0.91.channel.item[1].link".into()),
-                    id: None,
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn atom10() {
+        let s = include_str!("../tests/data/atom_1.0.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "atom_1.0.feed.title".into(),
+                link: "http://example.com/blog_plain".into(),
+                source: Some("http://example.com/blog/atom_1.0.xml".into()),
+                items: vec![
+                    Item {
+                        title: Some("atom_1.0.feed.entry[0].title".into()),
+                        link: Some("http://example.com/blog/entry1_plain".into()),
+                        id: Some("atom_1.0.feed.entry[0]^id".into()),
+                    },
+                    Item {
+                        title: Some("atom_1.0.feed.entry[1].title".into()),
+                        link: Some("http://example.com/blog/entry2".into()),
+                        id: Some("atom_1.0.feed.entry[1]^id".into()),
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss092() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_0.92.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_0.92.channel.title".into(),
-            link: "rss_0.92.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_0.92.channel.item[0].title".into()),
-                    link: Some("rss_0.92.channel.item[0].link".into()),
-                    id: None,
-                },
-                Item {
-                    title: Some("rss_0.92.channel.item[1].title".into()),
-                    link: Some("rss_0.92.channel.item[1].link".into()),
-                    id: None,
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn rss09() {
+        let s = include_str!("../tests/data/rss_0.9.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_0.9.channel.title".into(),
+                link: "rss_0.9.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_0.9.item[0].title".into()),
+                        link: Some("rss_0.9.item[0].link".into()),
+                        id: None,
+                    },
+                    Item {
+                        title: Some("rss_0.9.item[1].title".into()),
+                        link: Some("rss_0.9.item[1].link".into()),
+                        id: None,
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss093() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_0.93.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_0.93.channel.title".into(),
-            link: "rss_0.93.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_0.93.channel.item[0].title".into()),
-                    link: Some("rss_0.93.channel.item[0].link".into()),
-                    id: None,
-                },
-                Item {
-                    title: Some("rss_0.93.channel.item[1].title".into()),
-                    link: Some("rss_0.93.channel.item[1].link".into()),
-                    id: None,
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn rss091() {
+        let s = include_str!("../tests/data/rss_0.91.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_0.91.channel.title".into(),
+                link: "rss_0.91.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_0.91.channel.item[0].title".into()),
+                        link: Some("rss_0.91.channel.item[0].link".into()),
+                        id: None,
+                    },
+                    Item {
+                        title: Some("rss_0.91.channel.item[1].title".into()),
+                        link: Some("rss_0.91.channel.item[1].link".into()),
+                        id: None,
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss094() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_0.94.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_0.94.channel.title".into(),
-            link: "rss_0.94.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_0.94.channel.item[0].title".into()),
-                    link: Some("rss_0.94.channel.item[0].link".into()),
-                    id: Some("rss_0.94.channel.item[0].guid".into()),
-                },
-                Item {
-                    title: Some("rss_0.94.channel.item[1].title".into()),
-                    link: Some("rss_0.94.channel.item[1].link".into()),
-                    id: Some("rss_0.94.channel.item[1].guid".into()),
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn rss092() {
+        let s = include_str!("../tests/data/rss_0.92.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_0.92.channel.title".into(),
+                link: "rss_0.92.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_0.92.channel.item[0].title".into()),
+                        link: Some("rss_0.92.channel.item[0].link".into()),
+                        id: None,
+                    },
+                    Item {
+                        title: Some("rss_0.92.channel.item[1].title".into()),
+                        link: Some("rss_0.92.channel.item[1].link".into()),
+                        id: None,
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss10() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_1.0.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_1.0.channel.title".into(),
-            link: "rss_1.0.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_1.0.item[0].title".into()),
-                    link: Some("rss_1.0.item[0].link".into()),
-                    id: None,
-                },
-                Item {
-                    title: Some("rss_1.0.item[1].title".into()),
-                    link: Some("rss_1.0.item[1].link".into()),
-                    id: None,
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn rss093() {
+        let s = include_str!("../tests/data/rss_0.93.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_0.93.channel.title".into(),
+                link: "rss_0.93.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_0.93.channel.item[0].title".into()),
+                        link: Some("rss_0.93.channel.item[0].link".into()),
+                        id: None,
+                    },
+                    Item {
+                        title: Some("rss_0.93.channel.item[1].title".into()),
+                        link: Some("rss_0.93.channel.item[1].link".into()),
+                        id: None,
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss20() {
-    use std::io::Cursor;
-    let s = include_str!("../tests/data/rss_2.0.xml");
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(
-        r,
-        RSS {
-            title: "rss_2.0.channel.title".into(),
-            link: "rss_2.0.channel.link".into(),
-            source: None,
-            items: vec![
-                Item {
-                    title: Some("rss_2.0.channel.item[0].title".into()),
-                    link: Some("rss_2.0.channel.item[0].link".into()),
-                    id: Some("rss_2.0.channel.item[0].guid".into()),
-                },
-                Item {
-                    title: Some("rss_2.0.channel.item[1].title".into()),
-                    link: Some("rss_2.0.channel.item[1].link".into()),
-                    id: Some("rss_2.0.channel.item[1].guid".into()),
-                },
-            ],
-        }
-    );
-}
+    #[test]
+    fn rss094() {
+        let s = include_str!("../tests/data/rss_0.94.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_0.94.channel.title".into(),
+                link: "rss_0.94.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_0.94.channel.item[0].title".into()),
+                        link: Some("rss_0.94.channel.item[0].link".into()),
+                        id: Some("rss_0.94.channel.item[0].guid".into()),
+                    },
+                    Item {
+                        title: Some("rss_0.94.channel.item[1].title".into()),
+                        link: Some("rss_0.94.channel.item[1].link".into()),
+                        id: Some("rss_0.94.channel.item[1].guid".into()),
+                    },
+                ],
+            }
+        );
+    }
 
-#[test]
-fn test_rss_with_atom_ns() {
-    use std::io::Cursor;
-    let s = r#"<?xml version="1.0" encoding="UTF-8"?>
+    #[test]
+    fn rss10() {
+        let s = include_str!("../tests/data/rss_1.0.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_1.0.channel.title".into(),
+                link: "rss_1.0.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_1.0.item[0].title".into()),
+                        link: Some("rss_1.0.item[0].link".into()),
+                        id: None,
+                    },
+                    Item {
+                        title: Some("rss_1.0.item[1].title".into()),
+                        link: Some("rss_1.0.item[1].link".into()),
+                        id: None,
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn rss20() {
+        let s = include_str!("../tests/data/rss_2.0.xml");
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(
+            r,
+            RSS {
+                title: "rss_2.0.channel.title".into(),
+                link: "rss_2.0.channel.link".into(),
+                source: None,
+                items: vec![
+                    Item {
+                        title: Some("rss_2.0.channel.item[0].title".into()),
+                        link: Some("rss_2.0.channel.item[0].link".into()),
+                        id: Some("rss_2.0.channel.item[0].guid".into()),
+                    },
+                    Item {
+                        title: Some("rss_2.0.channel.item[1].title".into()),
+                        link: Some("rss_2.0.channel.item[1].link".into()),
+                        id: Some("rss_2.0.channel.item[1].guid".into()),
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn rss_with_atom_ns() {
+        let s = r#"<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
 <atom:link href="self link" rel="self" />
 </channel>
 </rss>"#;
-    let r = parse(Cursor::new(s)).unwrap();
-    assert_eq!(r.source, Some("self link".into()));
-}
+        let r = parse(Cursor::new(s)).unwrap();
+        assert_eq!(r.source, Some("self link".into()));
+    }
 
-#[test]
-fn test_parse_atom_link() {
-    use std::io::Cursor;
-    let data = vec![
-        r#"<link href="alternate href" />"#,
-        r#"<link href="alternate href" rel="alternate" />"#,
-        r#"<link href="self href" rel="self" />"#,
-        r#"<link href="hub href" rel="hub" />"#,
-        r#"<link href="other href" rel="other" />"#,
-        r#"<link />"#,
-    ];
-    let results = vec![
-        Some(AtomLink::Alternate("alternate href".into())),
-        Some(AtomLink::Alternate("alternate href".into())),
-        Some(AtomLink::Source("self href".into())),
-        Some(AtomLink::Hub("hub href".into())),
-        Some(AtomLink::Other(
-            "other href".into(),
-            Cow::Owned("other".into()),
-        )),
-        None,
-    ];
-    for (data, result) in data.iter().zip(results) {
-        let mut reader = XmlReader::from_reader(Cursor::new(data));
-        let mut buf = Vec::new();
-        if let XmlEvent::Empty(e) = reader.read_event(&mut buf).unwrap() {
-            let r = parse_atom_link(&mut reader, e.attributes()).unwrap();
-            assert_eq!(r, result);
+    #[test]
+    fn atom_link_parsing() {
+        let data = vec![
+            r#"<link href="alternate href" />"#,
+            r#"<link href="alternate href" rel="alternate" />"#,
+            r#"<link href="self href" rel="self" />"#,
+            r#"<link href="hub href" rel="hub" />"#,
+            r#"<link href="other href" rel="other" />"#,
+            r#"<link />"#,
+        ];
+        let results = vec![
+            Some(AtomLink::Alternate("alternate href".into())),
+            Some(AtomLink::Alternate("alternate href".into())),
+            Some(AtomLink::Source("self href".into())),
+            Some(AtomLink::Hub("hub href".into())),
+            Some(AtomLink::Other(
+                "other href".into(),
+                Cow::Owned("other".into()),
+            )),
+            None,
+        ];
+        for (data, result) in data.iter().zip(results) {
+            let mut reader = XmlReader::from_reader(Cursor::new(data));
+            let mut buf = Vec::new();
+            if let XmlEvent::Empty(e) = reader.read_event(&mut buf).unwrap() {
+                let r = parse_atom_link(&mut reader, e.attributes()).unwrap();
+                assert_eq!(r, result);
+            }
         }
+    }
+
+    #[test]
+    fn empty_input() {
+        let r = parse(Cursor::new(&[])).unwrap_err();
+        assert!(matches!(r, quick_xml::Error::UnexpectedEof(s) if s == "feed" ))
     }
 }
