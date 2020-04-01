@@ -1,13 +1,10 @@
 #![feature(backtrace)]
 
-use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use once_cell::sync::OnceCell;
-use reqwest;
 use structopt::StructOpt;
 use tbot;
 use tokio;

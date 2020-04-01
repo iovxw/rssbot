@@ -1,5 +1,3 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Mutex;
 use std::sync::{Arc, Once};
 use std::time::Duration;
@@ -11,7 +9,7 @@ use tbot::{
     types::{input_file, parameters},
 };
 
-use crate::data::{DataError, Database};
+use crate::data::{ Database};
 use crate::feed::RSS;
 
 mod opml;

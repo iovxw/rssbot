@@ -1,7 +1,5 @@
 use std::borrow::Cow;
 use std::str;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use lazy_static::lazy_static;
 use quick_xml::events::attributes::Attributes;
