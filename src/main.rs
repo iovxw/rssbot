@@ -11,6 +11,7 @@ use tokio;
 
 mod data;
 mod feed;
+mod gardener;
 mod handlers;
 
 use crate::data::Database;
@@ -58,6 +59,7 @@ async fn main() -> anyhow::Result<()> {
     BOT_NAME.set(me.user.username.clone().unwrap()).unwrap();
     BOT_ID.set(me.user.id).unwrap();
 
+    gardener::start_pruning(bot.clone(), db.clone());
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
     event_loop.command("rss", handle!(db, handlers::rss));
