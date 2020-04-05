@@ -89,6 +89,33 @@ impl FromXml for SkipThisElement {
     }
 }
 
+impl FromXml for Option<u32> {
+    fn from_xml<B: std::io::BufRead>(
+        bufs: &BufPool,
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> quick_xml::Result<Self> {
+        let mut buf = bufs.pop();
+        let mut output = None;
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(ref e)) => {
+                    SkipThisElement::from_xml(bufs, reader, e)?;
+                }
+                Ok(XmlEvent::Text(ref e)) => {
+                    let text = reader.decode(e)?;
+                    output = text.parse().ok();
+                }
+                Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
+                Err(err) => return Err(err.into()),
+                _ => (),
+            }
+            buf.clear();
+        }
+        Ok(output)
+    }
+}
+
 impl FromXml for Option<String> {
     fn from_xml<B: std::io::BufRead>(
         bufs: &BufPool,
@@ -125,6 +152,7 @@ pub struct RSS {
     pub title: String,
     pub link: String,
     pub source: Option<String>,
+    pub ttl: Option<u32>,
     pub items: Vec<Item>,
 }
 
@@ -137,6 +165,11 @@ impl FromXml for RSS {
         let mut buf = bufs.pop();
         let mut rss = RSS::default();
         let mut reading_rss_1_0_head = false;
+
+        // http://purl.org/rss/1.0/modules/syndication/
+        let mut sy_period: Option<SyPeriod> = None;
+        let mut sy_freq: Option<u32> = None;
+
         loop {
             match reader.read_event(&mut buf) {
                 Ok(XmlEvent::Empty(ref e)) => {
@@ -179,6 +212,15 @@ impl FromXml for RSS {
                         "item" | "entry" => {
                             rss.items.push(Item::from_xml(bufs, reader, e)?);
                         }
+                        "ttl" => {
+                            rss.ttl = <Option<u32> as FromXml>::from_xml(bufs, reader, e)?;
+                        }
+                        "updatePeriod" => {
+                            sy_period = <Option<SyPeriod> as FromXml>::from_xml(bufs, reader, e)?;
+                        }
+                        "updateFrequency" => {
+                            sy_freq = <Option<u32> as FromXml>::from_xml(bufs, reader, e)?;
+                        }
                         _ => {
                             SkipThisElement::from_xml(bufs, reader, e)?;
                         }
@@ -193,6 +235,17 @@ impl FromXml for RSS {
                 _ => (),
             }
             buf.clear();
+        }
+        if rss.ttl.is_none() {
+            let freq = sy_freq.unwrap_or(1); // 1 is the default value
+            rss.ttl = match sy_period {
+                Some(SyPeriod::Hourly) => Some(60 / freq),
+                Some(SyPeriod::Daily) => Some((60 * 24) / freq),
+                Some(SyPeriod::Weekly) => Some((60 * 24 * 7) / freq),
+                Some(SyPeriod::Monthly) => Some((60 * 24 * 30) / freq),
+                Some(SyPeriod::Yearly) => Some((60 * 24 * 365) / freq),
+                None => None,
+            };
         }
         Ok(rss)
     }
@@ -257,6 +310,49 @@ impl FromXml for Item {
             buf.clear();
         }
         Ok(item)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+enum SyPeriod {
+    Hourly,
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+impl FromXml for Option<SyPeriod> {
+    fn from_xml<B: std::io::BufRead>(
+        bufs: &BufPool,
+        reader: &mut XmlReader<B>,
+        _start: &BytesStart,
+    ) -> quick_xml::Result<Self> {
+        let mut buf = bufs.pop();
+        let mut output = None;
+        loop {
+            match reader.read_event(&mut buf) {
+                Ok(XmlEvent::Start(ref e)) => {
+                    SkipThisElement::from_xml(bufs, reader, e)?;
+                }
+                Ok(XmlEvent::Text(ref e)) => {
+                    let period = match reader.decode(e)? {
+                        "hourly" => SyPeriod::Hourly,
+                        "daily" => SyPeriod::Daily,
+                        "weekly" => SyPeriod::Weekly,
+                        "monthly" => SyPeriod::Monthly,
+                        "yearly" => SyPeriod::Yearly,
+                        _ => continue, // ignore this error
+                    };
+                    output = Some(period);
+                }
+                Ok(XmlEvent::End(_)) | Ok(XmlEvent::Eof) => break,
+                Err(err) => return Err(err.into()),
+                _ => (),
+            }
+            buf.clear();
+        }
+        Ok(output)
     }
 }
 
@@ -386,7 +482,6 @@ mod test {
             RSS {
                 title: "atom_0.3.feed.title".into(),
                 link: "atom_0.3.feed.link^href".into(),
-                source: None,
                 items: vec![
                     Item {
                         title: Some("atom_0.3.feed.entry[0].title".into()),
@@ -399,6 +494,7 @@ mod test {
                         id: Some("atom_0.3.feed.entry[1]^id".into()),
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -425,6 +521,7 @@ mod test {
                         id: Some("atom_1.0.feed.entry[1]^id".into()),
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -438,7 +535,6 @@ mod test {
             RSS {
                 title: "rss_0.9.channel.title".into(),
                 link: "rss_0.9.channel.link".into(),
-                source: None,
                 items: vec![
                     Item {
                         title: Some("rss_0.9.item[0].title".into()),
@@ -451,6 +547,7 @@ mod test {
                         id: None,
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -464,7 +561,6 @@ mod test {
             RSS {
                 title: "rss_0.91.channel.title".into(),
                 link: "rss_0.91.channel.link".into(),
-                source: None,
                 items: vec![
                     Item {
                         title: Some("rss_0.91.channel.item[0].title".into()),
@@ -477,6 +573,7 @@ mod test {
                         id: None,
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -490,7 +587,6 @@ mod test {
             RSS {
                 title: "rss_0.92.channel.title".into(),
                 link: "rss_0.92.channel.link".into(),
-                source: None,
                 items: vec![
                     Item {
                         title: Some("rss_0.92.channel.item[0].title".into()),
@@ -503,6 +599,7 @@ mod test {
                         id: None,
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -516,7 +613,6 @@ mod test {
             RSS {
                 title: "rss_0.93.channel.title".into(),
                 link: "rss_0.93.channel.link".into(),
-                source: None,
                 items: vec![
                     Item {
                         title: Some("rss_0.93.channel.item[0].title".into()),
@@ -529,6 +625,7 @@ mod test {
                         id: None,
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -542,7 +639,7 @@ mod test {
             RSS {
                 title: "rss_0.94.channel.title".into(),
                 link: "rss_0.94.channel.link".into(),
-                source: None,
+                ttl: Some(100),
                 items: vec![
                     Item {
                         title: Some("rss_0.94.channel.item[0].title".into()),
@@ -555,6 +652,7 @@ mod test {
                         id: Some("rss_0.94.channel.item[1].guid".into()),
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -568,7 +666,6 @@ mod test {
             RSS {
                 title: "rss_1.0.channel.title".into(),
                 link: "rss_1.0.channel.link".into(),
-                source: None,
                 items: vec![
                     Item {
                         title: Some("rss_1.0.item[0].title".into()),
@@ -581,6 +678,7 @@ mod test {
                         id: None,
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -594,7 +692,7 @@ mod test {
             RSS {
                 title: "rss_2.0.channel.title".into(),
                 link: "rss_2.0.channel.link".into(),
-                source: None,
+                ttl: Some(100),
                 items: vec![
                     Item {
                         title: Some("rss_2.0.channel.item[0].title".into()),
@@ -607,6 +705,7 @@ mod test {
                         id: Some("rss_2.0.channel.item[1].guid".into()),
                     },
                 ],
+                ..RSS::default()
             }
         );
     }
@@ -658,5 +757,58 @@ mod test {
     fn empty_input() {
         let r = parse(Cursor::new(&[])).unwrap_err();
         assert!(matches!(r, quick_xml::Error::UnexpectedEof(s) if s == "feed" ))
+    }
+
+    #[test]
+    fn ttl_sy() {
+        let sy_input = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/">
+<channel>
+<sy:updatePeriod>hourly</sy:updatePeriod>
+<sy:updateFrequency>6</sy:updateFrequency>
+</channel>
+</rss>"#;
+        let sy_output = parse(Cursor::new(sy_input)).unwrap();
+        assert_eq!(sy_output.ttl, Some(10));
+    }
+
+    #[test]
+    fn ttl_sy_default_freq() {
+        let sy_input = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/">
+<channel>
+<sy:updatePeriod>daily</sy:updatePeriod>
+</channel>
+</rss>"#;
+        let sy_output = parse(Cursor::new(sy_input)).unwrap();
+        assert_eq!(sy_output.ttl, Some(60 * 24));
+    }
+
+    #[test]
+    fn ttl() {
+        let input = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<ttl>
+    42
+</ttl>
+</channel>
+</rss>"#;
+        let output = parse(Cursor::new(input)).unwrap();
+        assert_eq!(output.ttl, Some(42));
+    }
+
+    #[test]
+    fn ttl_priority() {
+        let input = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/">
+<channel>
+<sy:updatePeriod>hourly</sy:updatePeriod>
+<sy:updateFrequency>1</sy:updateFrequency>
+<ttl>42</ttl>
+</channel>
+</rss>"#;
+        let output = parse(Cursor::new(input)).unwrap();
+        assert_eq!(output.ttl, Some(42));
     }
 }
