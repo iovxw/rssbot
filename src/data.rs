@@ -130,7 +130,7 @@ impl Database {
             .unwrap_or(false)
     }
 
-    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &feed::RSS) -> bool {
+    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &feed::Rss) -> bool {
         let feed_id = gen_hash(&rss_link);
         {
             let subscribed_feeds = self

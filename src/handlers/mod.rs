@@ -10,7 +10,7 @@ use tbot::{
 };
 
 use crate::data::Database;
-use crate::feed::RSS;
+use crate::feed::Rss;
 
 mod opml;
 
@@ -258,7 +258,7 @@ pub async fn export(
     Ok(())
 }
 
-async fn pull_feed(url: &str) -> anyhow::Result<RSS> {
+async fn pull_feed(url: &str) -> anyhow::Result<Rss> {
     let mut resp = client().get(url).send().await?.error_for_status()?;
     if let Some(len) = resp.content_length() {
         if len > RESP_SIZE_LIMIT as u64 {

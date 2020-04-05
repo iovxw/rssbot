@@ -148,7 +148,7 @@ impl FromXml for Option<String> {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RSS {
+pub struct Rss {
     pub title: String,
     pub link: String,
     pub source: Option<String>,
@@ -156,14 +156,14 @@ pub struct RSS {
     pub items: Vec<Item>,
 }
 
-impl FromXml for RSS {
+impl FromXml for Rss {
     fn from_xml<B: std::io::BufRead>(
         bufs: &BufPool,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
     ) -> quick_xml::Result<Self> {
         let mut buf = bufs.pop();
-        let mut rss = RSS::default();
+        let mut rss = Rss::default();
         let mut reading_rss_1_0_head = false;
 
         // http://purl.org/rss/1.0/modules/syndication/
@@ -356,7 +356,7 @@ impl FromXml for Option<SyPeriod> {
     }
 }
 
-pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<RSS> {
+pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<Rss> {
     let mut reader = XmlReader::from_reader(reader);
     reader.trim_text(true);
     let bufs = BufPool::new(4, 512);
@@ -366,7 +366,7 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<RSS> {
             Ok(XmlEvent::Start(ref e)) => match reader.decode(e.name())? {
                 "rss" => continue,
                 "channel" | "feed" | "rdf:RDF" => {
-                    return RSS::from_xml(&bufs, &mut reader, e);
+                    return Rss::from_xml(&bufs, &mut reader, e);
                 }
                 _ => {
                     SkipThisElement::from_xml(&bufs, &mut reader, e)?;
@@ -396,7 +396,7 @@ fn url_relative_to_absolute(link: &mut String, host: &str) {
     }
 }
 
-pub fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
+pub fn fix_relative_url(mut rss: Rss, rss_link: &str) -> Rss {
     lazy_static! {
         static ref HOST: Regex = Regex::new(r"^(https?://[^/]+)").unwrap();
     }
@@ -479,7 +479,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "atom_0.3.feed.title".into(),
                 link: "atom_0.3.feed.link^href".into(),
                 items: vec![
@@ -494,7 +494,7 @@ mod test {
                         id: Some("atom_0.3.feed.entry[1]^id".into()),
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -505,7 +505,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "atom_1.0.feed.title".into(),
                 link: "http://example.com/blog_plain".into(),
                 source: Some("http://example.com/blog/atom_1.0.xml".into()),
@@ -521,7 +521,7 @@ mod test {
                         id: Some("atom_1.0.feed.entry[1]^id".into()),
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -532,7 +532,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_0.9.channel.title".into(),
                 link: "rss_0.9.channel.link".into(),
                 items: vec![
@@ -547,7 +547,7 @@ mod test {
                         id: None,
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -558,7 +558,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_0.91.channel.title".into(),
                 link: "rss_0.91.channel.link".into(),
                 items: vec![
@@ -573,7 +573,7 @@ mod test {
                         id: None,
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -584,7 +584,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_0.92.channel.title".into(),
                 link: "rss_0.92.channel.link".into(),
                 items: vec![
@@ -599,7 +599,7 @@ mod test {
                         id: None,
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -610,7 +610,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_0.93.channel.title".into(),
                 link: "rss_0.93.channel.link".into(),
                 items: vec![
@@ -625,7 +625,7 @@ mod test {
                         id: None,
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -636,7 +636,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_0.94.channel.title".into(),
                 link: "rss_0.94.channel.link".into(),
                 ttl: Some(100),
@@ -652,7 +652,7 @@ mod test {
                         id: Some("rss_0.94.channel.item[1].guid".into()),
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -663,7 +663,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_1.0.channel.title".into(),
                 link: "rss_1.0.channel.link".into(),
                 items: vec![
@@ -678,7 +678,7 @@ mod test {
                         id: None,
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
@@ -689,7 +689,7 @@ mod test {
         let r = parse(Cursor::new(s)).unwrap();
         assert_eq!(
             r,
-            RSS {
+            Rss {
                 title: "rss_2.0.channel.title".into(),
                 link: "rss_2.0.channel.link".into(),
                 ttl: Some(100),
@@ -705,7 +705,7 @@ mod test {
                         id: Some("rss_2.0.channel.item[1].guid".into()),
                     },
                 ],
-                ..RSS::default()
+                ..Rss::default()
             }
         );
     }
