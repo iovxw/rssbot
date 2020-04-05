@@ -1,4 +1,8 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
+use std::mem;
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use std::str;
 
 use lazy_static::lazy_static;
@@ -8,9 +12,9 @@ use quick_xml::events::Event as XmlEvent;
 use quick_xml::Reader as XmlReader;
 use regex::Regex;
 
-pub trait FromXml: Sized {
+trait FromXml: Sized {
     fn from_xml<B: std::io::BufRead>(
-        bufs: &mut Vec<Vec<u8>>,
+        bufs: &BufPool,
         reader: &mut XmlReader<B>,
         start: &BytesStart,
     ) -> quick_xml::Result<Self>;
@@ -64,11 +68,11 @@ struct SkipThisElement;
 
 impl FromXml for SkipThisElement {
     fn from_xml<B: std::io::BufRead>(
-        bufs: &mut Vec<Vec<u8>>,
+        bufs: &BufPool,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
     ) -> quick_xml::Result<Self> {
-        let mut buf = bufs.pop().unwrap_or_default();
+        let mut buf = bufs.pop();
         let mut depth = 1u64;
         loop {
             match reader.read_event(&mut buf) {
@@ -81,18 +85,17 @@ impl FromXml for SkipThisElement {
             }
             buf.clear();
         }
-        bufs.push(buf);
         Ok(SkipThisElement)
     }
 }
 
 impl FromXml for Option<String> {
     fn from_xml<B: std::io::BufRead>(
-        bufs: &mut Vec<Vec<u8>>,
+        bufs: &BufPool,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
     ) -> quick_xml::Result<Self> {
-        let mut buf = bufs.pop().unwrap_or_default();
+        let mut buf = bufs.pop();
         let mut content: Option<String> = None;
         loop {
             match reader.read_event(&mut buf) {
@@ -113,7 +116,6 @@ impl FromXml for Option<String> {
             }
             buf.clear();
         }
-        bufs.push(buf);
         Ok(content)
     }
 }
@@ -128,11 +130,11 @@ pub struct RSS {
 
 impl FromXml for RSS {
     fn from_xml<B: std::io::BufRead>(
-        bufs: &mut Vec<Vec<u8>>,
+        bufs: &BufPool,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
     ) -> quick_xml::Result<Self> {
-        let mut buf = bufs.pop().unwrap_or_default();
+        let mut buf = bufs.pop();
         let mut rss = RSS::default();
         let mut reading_rss_1_0_head = false;
         loop {
@@ -192,7 +194,6 @@ impl FromXml for RSS {
             }
             buf.clear();
         }
-        bufs.push(buf);
         Ok(rss)
     }
 }
@@ -206,11 +207,11 @@ pub struct Item {
 
 impl FromXml for Item {
     fn from_xml<B: std::io::BufRead>(
-        bufs: &mut Vec<Vec<u8>>,
+        bufs: &BufPool,
         reader: &mut XmlReader<B>,
         _start: &BytesStart,
     ) -> quick_xml::Result<Self> {
-        let mut buf = bufs.pop().unwrap_or_default();
+        let mut buf = bufs.pop();
         let mut item = Item::default();
         loop {
             match reader.read_event(&mut buf) {
@@ -255,7 +256,6 @@ impl FromXml for Item {
             }
             buf.clear();
         }
-        bufs.push(buf);
         Ok(item)
     }
 }
@@ -263,17 +263,17 @@ impl FromXml for Item {
 pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<RSS> {
     let mut reader = XmlReader::from_reader(reader);
     reader.trim_text(true);
-    let mut bufs = vec![Vec::with_capacity(512); 4];
-    let mut buf = bufs.pop().unwrap_or_default();
+    let bufs = BufPool::new(4, 512);
+    let mut buf = bufs.pop();
     loop {
         match reader.read_event(&mut buf) {
             Ok(XmlEvent::Start(ref e)) => match reader.decode(e.name())? {
                 "rss" => continue,
                 "channel" | "feed" | "rdf:RDF" => {
-                    return RSS::from_xml(&mut bufs, &mut reader, e);
+                    return RSS::from_xml(&bufs, &mut reader, e);
                 }
                 _ => {
-                    SkipThisElement::from_xml(&mut bufs, &mut reader, e)?;
+                    SkipThisElement::from_xml(&bufs, &mut reader, e)?;
                 }
             },
             Ok(XmlEvent::Eof) => return Err(quick_xml::Error::UnexpectedEof("feed".to_string())),
@@ -318,6 +318,57 @@ pub fn fix_relative_url(mut rss: RSS, rss_link: &str) -> RSS {
     }
 
     rss
+}
+
+struct BufPool {
+    pool: Rc<RefCell<Vec<Vec<u8>>>>,
+    capacity: usize,
+}
+
+impl BufPool {
+    fn new(init_size: usize, capacity: usize) -> Self {
+        BufPool {
+            pool: Rc::new(RefCell::new(vec![Vec::with_capacity(capacity); init_size])),
+            capacity,
+        }
+    }
+    fn pop(&self) -> Buffer {
+        let buf = self
+            .pool
+            .borrow_mut()
+            .pop()
+            .unwrap_or_else(|| Vec::with_capacity(self.capacity));
+        Buffer {
+            pool: self.pool.clone(),
+            inner: buf,
+        }
+    }
+}
+
+struct Buffer {
+    pool: Rc<RefCell<Vec<Vec<u8>>>>,
+    inner: Vec<u8>,
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        self.pool
+            .borrow_mut()
+            .push(mem::replace(&mut self.inner, Vec::new()))
+    }
+}
+
+impl Deref for Buffer {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Buffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 #[cfg(test)]
