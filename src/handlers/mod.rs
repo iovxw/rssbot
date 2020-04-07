@@ -28,12 +28,9 @@ impl MsgTarget {
             first_time: true,
         }
     }
-    fn update(self, message_id: tbot::types::message::Id) -> Self {
-        MsgTarget {
-            message_id,
-            first_time: false,
-            ..self
-        }
+    fn update(&mut self, message_id: tbot::types::message::Id) {
+        self.message_id = message_id;
+        self.first_time = false;
     }
 }
 
@@ -41,16 +38,11 @@ pub async fn rss(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
+    let target = &mut MsgTarget::new(chat_id, cmd.message_id);
 
     if !channel.is_empty() {
         let user_id = cmd.from.as_ref().unwrap().id;
-        let channel_id = check_channel_permission(
-            &cmd.bot,
-            channel,
-            MsgTarget::new(chat_id, cmd.message_id),
-            user_id,
-        )
-        .await?;
+        let channel_id = check_channel_permission(&cmd.bot, channel, target, user_id).await?;
         if channel_id.is_none() {
             return Ok(());
         }
@@ -89,19 +81,14 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
     let text = &cmd.text.value;
     let args = text.split_whitespace().collect::<Vec<_>>();
     let mut target_id = chat_id;
+    let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;
 
     match &*args {
         [url] => feed_url = url,
         [channel, url] => {
             let user_id = cmd.from.as_ref().unwrap().id;
-            let channel_id = check_channel_permission(
-                &cmd.bot,
-                channel,
-                MsgTarget::new(chat_id, cmd.message_id),
-                user_id,
-            )
-            .await?;
+            let channel_id = check_channel_permission(&cmd.bot, channel, target, user_id).await?;
             if channel_id.is_none() {
                 return Ok(());
             }
@@ -113,20 +100,10 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
         }
     };
     if db.lock().unwrap().is_subscribed(target_id.0, feed_url) {
-        update_response(
-            &cmd.bot,
-            MsgTarget::new(chat_id, cmd.message_id),
-            parameters::Text::html("已订阅过的 RSS"),
-        )
-        .await?;
+        update_response(&cmd.bot, target, parameters::Text::html("已订阅过的 RSS")).await?;
         return Ok(());
     }
-    let resp_ctx = update_response(
-        &cmd.bot,
-        MsgTarget::new(chat_id, cmd.message_id),
-        parameters::Text::plain("处理中，请稍候"),
-    )
-    .await?;
+    update_response(&cmd.bot, target, parameters::Text::plain("处理中，请稍候")).await?;
     let msg = match pull_feed(feed_url).await {
         Ok(feed) => {
             if db.lock().unwrap().subscribe(target_id.0, feed_url, &feed) {
@@ -141,7 +118,7 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
         }
         Err(e) => format!("订阅失败：{}", Escape(&e.to_string())),
     };
-    update_response(&cmd.bot, resp_ctx, parameters::Text::html(&msg)).await?;
+    update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
     Ok(())
 }
 
@@ -150,19 +127,14 @@ pub async fn unsub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> 
     let text = &cmd.text.value;
     let args = text.split_whitespace().collect::<Vec<_>>();
     let mut target_id = chat_id;
+    let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;
 
     match &*args {
         [url] => feed_url = url,
         [channel, url] => {
             let user_id = cmd.from.as_ref().unwrap().id;
-            let channel_id = check_channel_permission(
-                &cmd.bot,
-                channel,
-                MsgTarget::new(chat_id, cmd.message_id),
-                user_id,
-            )
-            .await?;
+            let channel_id = check_channel_permission(&cmd.bot, channel, target, user_id).await?;
             if channel_id.is_none() {
                 return Ok(());
             }
@@ -182,12 +154,7 @@ pub async fn unsub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> 
     } else {
         "未订阅过的 RSS".into()
     };
-    update_response(
-        &cmd.bot,
-        MsgTarget::new(chat_id, cmd.message_id),
-        parameters::Text::html(&msg),
-    )
-    .await?;
+    update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
     Ok(())
 }
 
@@ -198,16 +165,11 @@ pub async fn export(
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
+    let target = &mut MsgTarget::new(chat_id, cmd.message_id);
 
     if !channel.is_empty() {
         let user_id = cmd.from.as_ref().unwrap().id;
-        let channel_id = check_channel_permission(
-            &cmd.bot,
-            channel,
-            MsgTarget::new(chat_id, cmd.message_id),
-            user_id,
-        )
-        .await?;
+        let channel_id = check_channel_permission(&cmd.bot, channel, target, user_id).await?;
         if channel_id.is_none() {
             return Ok(());
         }
@@ -216,12 +178,7 @@ pub async fn export(
 
     let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
     if feeds.is_none() {
-        update_response(
-            &cmd.bot,
-            MsgTarget::new(chat_id, cmd.message_id),
-            parameters::Text::plain("订阅列表为空"),
-        )
-        .await?;
+        update_response(&cmd.bot, target, parameters::Text::plain("订阅列表为空")).await?;
         return Ok(());
     }
     let opml = opml::into_opml(feeds.unwrap());
@@ -239,9 +196,9 @@ pub async fn export(
 
 async fn update_response(
     bot: &tbot::Bot<Https>,
-    target: MsgTarget,
+    target: &mut MsgTarget,
     message: parameters::Text<'_>,
-) -> Result<MsgTarget, tbot::errors::MethodCall> {
+) -> Result<(), tbot::errors::MethodCall> {
     let msg = if target.first_time {
         bot.send_message(target.chat_id, message)
             .reply_to_message_id(target.message_id)
@@ -252,32 +209,51 @@ async fn update_response(
             .call()
             .await?
     };
-    Ok(target.update(msg.id))
+    target.update(msg.id);
+    Ok(())
 }
 
 async fn check_channel_permission(
     bot: &tbot::Bot<Https>,
     channel: &str,
-    target: MsgTarget,
+    target: &mut MsgTarget,
     user_id: tbot::types::user::Id,
 ) -> Result<Option<tbot::types::chat::Id>, tbot::errors::MethodCall> {
+    use tbot::errors::MethodCall;
     let channel_id = channel
         .parse::<i64>()
         .map(|id| parameters::ChatId::Id(id.into()))
-        .unwrap_or_else(|_| {
-            if channel.starts_with('@') {
-                parameters::ChatId::Username(&channel[1..])
-            } else {
-                parameters::ChatId::Username(channel)
-            }
-        });
+        .unwrap_or_else(|_| parameters::ChatId::Username(channel));
+    update_response(bot, target, parameters::Text::plain("正在验证 Channel")).await?;
 
-    let chat = bot.get_chat(channel_id).call().await?;
+    let chat = match bot.get_chat(channel_id).call().await {
+        Err(MethodCall::RequestError {
+            description,
+            error_code: 400,
+            ..
+        }) => {
+            let msg = format!("无法找到目标 Channel：{}", description);
+            update_response(bot, target, parameters::Text::plain(&msg)).await?;
+            return Ok(None);
+        }
+        other => other?,
+    };
     if !chat.kind.is_channel() {
         update_response(bot, target, parameters::Text::plain("目标需为 Channel")).await?;
         return Ok(None);
     }
-    let admins = bot.get_chat_administrators(channel_id).call().await?;
+    let admins = match bot.get_chat_administrators(channel_id).call().await {
+        Err(MethodCall::RequestError {
+            description,
+            error_code: 400,
+            ..
+        }) => {
+            let msg = format!("无法获取频道信息（{}），请将本 Bot 设为管理员", description);
+            update_response(bot, target, parameters::Text::plain(&msg)).await?;
+            return Ok(None);
+        }
+        other => other?,
+    };
     let user_is_admin = admins
         .iter()
         .find(|member| member.user.id == user_id)
