@@ -9,10 +9,13 @@ use structopt::StructOpt;
 use tbot;
 use tokio;
 
+mod client;
 mod data;
 mod feed;
+mod fetcher;
 mod gardener;
 mod handlers;
+mod messages;
 
 use crate::data::Database;
 
@@ -25,8 +28,14 @@ struct Opt {
     /// Telegram bot token
     token: String,
     /// Path to database
-    #[structopt(short = "d", default_value = "./rssbot.json")]
+    #[structopt(short = "d", long, default_value = "./rssbot.json")]
     database: PathBuf,
+
+    #[structopt(long, default_value = "300")] // 5 minutes
+    min_interval: u32,
+
+    #[structopt(long, default_value = "43200")] // 12 hours
+    max_interval: u32,
 }
 
 macro_rules! handle {
@@ -60,6 +69,7 @@ async fn main() -> anyhow::Result<()> {
     BOT_ID.set(me.user.id).unwrap();
 
     gardener::start_pruning(bot.clone(), db.clone());
+    fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
     event_loop.command("rss", handle!(db, handlers::rss));

@@ -1,21 +1,17 @@
+use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::{Arc, Once};
-use std::time::Duration;
 
-use reqwest;
 use tbot::{
     connectors::Https,
     contexts::{Command, Text},
     types::{input_file, parameters},
 };
 
+use crate::client::pull_feed;
 use crate::data::Database;
-use crate::feed::Rss;
+use crate::messages::{format_large_msg, Escape};
 
 mod opml;
-
-pub const TELEGRAM_MAX_MSG_LEN: usize = 4096;
-const RESP_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
 #[derive(Debug, Copy, Clone)]
 struct MsgTarget {
@@ -41,40 +37,6 @@ impl MsgTarget {
     }
 }
 
-fn client() -> Arc<reqwest::Client> {
-    static mut CLIENT: Option<Arc<reqwest::Client>> = None;
-    static INIT: Once = Once::new();
-
-    INIT.call_once(|| {
-        let mut headers = reqwest::header::HeaderMap::new();
-        let ua = format!(
-            concat!(
-                env!("CARGO_PKG_NAME"),
-                "/",
-                env!("CARGO_PKG_VERSION"),
-                " (+https://t.me/{})"
-            ),
-            crate::BOT_NAME.get().expect("BOT_NAME not initialized")
-        );
-        headers.insert(
-            reqwest::header::USER_AGENT,
-            reqwest::header::HeaderValue::from_str(&ua).unwrap(),
-        );
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .default_headers(headers)
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .unwrap();
-
-        unsafe {
-            CLIENT = Some(Arc::new(client));
-        }
-    });
-
-    unsafe { CLIENT.clone() }.unwrap()
-}
-
 pub async fn rss(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> anyhow::Result<()> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
@@ -97,7 +59,7 @@ pub async fn rss(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
 
     let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
     let msgs = if let Some(feeds) = feeds {
-        format_and_split_msgs("订阅列表：".to_string(), &feeds, |feed| {
+        format_large_msg("订阅列表：".to_string(), &feeds, |feed| {
             format!(
                 "<a href=\"{}\">{}</a>",
                 Escape(&feed.link),
@@ -258,25 +220,6 @@ pub async fn export(
     Ok(())
 }
 
-async fn pull_feed(url: &str) -> anyhow::Result<Rss> {
-    let mut resp = client().get(url).send().await?.error_for_status()?;
-    if let Some(len) = resp.content_length() {
-        if len > RESP_SIZE_LIMIT as u64 {
-            return Err(anyhow::format_err!("too big"));
-        }
-    }
-    let mut buf = Vec::new(); // TODO: capacity?
-    while let Some(bytes) = resp.chunk().await? {
-        if buf.len() + bytes.len() > RESP_SIZE_LIMIT {
-            return Err(anyhow::format_err!("too big"));
-        }
-        buf.extend_from_slice(&bytes);
-    }
-
-    let feed = crate::feed::parse(std::io::Cursor::new(buf))?;
-    Ok(crate::feed::fix_relative_url(feed, url))
-}
-
 async fn update_response(
     bot: &tbot::Bot<Https>,
     target: MsgTarget,
@@ -345,55 +288,4 @@ async fn check_channel_permission(
         return Ok(None);
     }
     Ok(Some(chat.id))
-}
-
-pub fn format_and_split_msgs<T, F>(head: String, data: &[T], line_format_fn: F) -> Vec<String>
-where
-    F: Fn(&T) -> String,
-{
-    let mut msgs = vec![head];
-    for item in data {
-        let line = line_format_fn(item);
-        if msgs.last_mut().unwrap().len() + line.len() > TELEGRAM_MAX_MSG_LEN {
-            msgs.push(line);
-        } else {
-            let msg = msgs.last_mut().unwrap();
-            msg.push('\n');
-            msg.push_str(&line);
-        }
-    }
-    msgs
-}
-
-pub struct Escape<'a>(pub &'a str);
-
-impl<'a> ::std::fmt::Display for Escape<'a> {
-    fn fmt(&self, fmt: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        // https://core.telegram.org/bots/api#html-style
-        let Escape(s) = *self;
-        let pile_o_bits = s;
-        let mut last = 0;
-        for (i, ch) in s.bytes().enumerate() {
-            match ch as char {
-                '<' | '>' | '&' | '"' => {
-                    fmt.write_str(&pile_o_bits[last..i])?;
-                    let s = match ch as char {
-                        '>' => "&gt;",
-                        '<' => "&lt;",
-                        '&' => "&amp;",
-                        '"' => "&quot;",
-                        _ => unreachable!(),
-                    };
-                    fmt.write_str(s)?;
-                    last = i + 1;
-                }
-                _ => {}
-            }
-        }
-
-        if last < s.len() {
-            fmt.write_str(&pile_o_bits[last..])?;
-        }
-        Ok(())
-    }
 }

@@ -356,6 +356,7 @@ impl FromXml for Option<SyPeriod> {
     }
 }
 
+/// NOTE: This function doesn't check the syntax of feed, it only cares about performance
 pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<Rss> {
     let mut reader = XmlReader::from_reader(reader);
     reader.trim_text(true);

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -33,6 +33,7 @@ pub struct Feed {
     pub title: String,
     pub down_time: Option<SystemTime>,
     pub subscribers: HashSet<SubscriberID>,
+    pub ttl: Option<u32>,
     hash_list: Vec<u64>,
 }
 
@@ -111,10 +112,16 @@ impl Database {
         })
     }
 
-    pub fn set_down_time(&mut self, rss_link: &str) -> SystemTime {
+    pub fn get_or_update_down_time(&mut self, rss_link: &str) -> Duration {
         let feed_id = gen_hash(&rss_link);
         let feed = self.feeds.get_mut(&feed_id).unwrap();
-        *feed.down_time.get_or_insert_with(|| SystemTime::now())
+        let now = SystemTime::now();
+        if let Some(t) = feed.down_time {
+            now.duration_since(t).unwrap_or_default()
+        } else {
+            feed.down_time = Some(now);
+            Duration::default()
+        }
     }
 
     pub fn reset_down_time(&mut self, rss_link: &str) {
@@ -146,6 +153,7 @@ impl Database {
                 link: rss_link.to_owned(),
                 title: rss.title.to_owned(),
                 down_time: None,
+                ttl: rss.ttl,
                 hash_list: rss.items.iter().map(gen_item_hash).collect(),
                 subscribers: HashSet::new(),
             });
@@ -211,48 +219,49 @@ impl Database {
         self.subscribers.insert(to, feeds);
     }
 
-    pub fn update(&mut self, rss_link: &str, items: Vec<feed::Item>) -> Vec<feed::Item> {
+    /// Update the feed in database, return updates
+    pub fn update(&mut self, rss_link: &str, new_feed: feed::Rss) -> Vec<FeedUpdate> {
         let feed_id = gen_hash(&rss_link);
         if self.feeds.get(&feed_id).is_none() {
             return Vec::new();
         }
 
         self.reset_down_time(rss_link);
+        let feed = self.feeds.get_mut(&feed_id).unwrap();
 
-        let mut result = Vec::new();
+        let mut updates = Vec::new();
+        let mut new_items = Vec::new();
         let mut new_hash_list = Vec::new();
-        let items_len = items.len();
-        for item in items {
+        let items_len = new_feed.items.len();
+        for item in new_feed.items {
             let hash = gen_item_hash(&item);
-            if !self.feeds[&feed_id].hash_list.contains(&hash) {
+            if !feed.hash_list.contains(&hash) {
                 new_hash_list.push(hash);
-                result.push(item);
+                new_items.push(item);
             }
         }
-        if !result.is_empty() {
-            {
-                let max_size = items_len * 2;
-                let feed = self.feeds.get_mut(&feed_id).unwrap();
-                let mut append: Vec<u64> = feed
-                    .hash_list
-                    .iter()
-                    .take(max_size - new_hash_list.len())
-                    .cloned()
-                    .collect();
-                new_hash_list.append(&mut append);
-                feed.hash_list = new_hash_list;
-            }
+        if !new_items.is_empty() {
+            updates.push(FeedUpdate::Items(new_items));
+
+            let max_size = items_len * 2;
+            let mut append: Vec<u64> = feed
+                .hash_list
+                .iter()
+                .take(max_size - new_hash_list.len())
+                .cloned()
+                .collect();
+            new_hash_list.append(&mut append);
+            feed.hash_list = new_hash_list;
+        }
+        if new_feed.title != feed.title {
+            updates.push(FeedUpdate::Title(new_feed.title.clone()));
+            feed.title = new_feed.title;
+        }
+        feed.ttl = new_feed.ttl;
+        if !updates.is_empty() {
             self.save().unwrap_or_default();
         }
-        result
-    }
-
-    pub fn update_title(&mut self, rss_link: &str, new_title: &str) {
-        let feed_id = gen_hash(&rss_link);
-        self.feeds
-            .get_mut(&feed_id)
-            .map(|feed| feed.title = new_title.to_owned())
-            .unwrap_or_default();
+        updates
     }
 
     pub fn save(&self) -> Result<(), DataError> {
@@ -267,6 +276,11 @@ impl Database {
         }
         Ok(())
     }
+}
+
+pub enum FeedUpdate {
+    Items(Vec<feed::Item>),
+    Title(String),
 }
 
 fn gen_item_hash(item: &feed::Item) -> u64 {
