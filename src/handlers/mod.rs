@@ -112,6 +112,15 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
             return Ok(());
         }
     };
+    if db.lock().unwrap().is_subscribed(target_id.0, feed_url) {
+        update_response(
+            &cmd.bot,
+            MsgTarget::new(chat_id, cmd.message_id),
+            parameters::Text::html("已订阅过的 RSS"),
+        )
+        .await?;
+        return Ok(());
+    }
     let resp_ctx = update_response(
         &cmd.bot,
         MsgTarget::new(chat_id, cmd.message_id),
@@ -121,12 +130,16 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
     let msg = match pull_feed(feed_url).await {
         Ok(feed) => {
             if db.lock().unwrap().subscribe(target_id.0, feed_url, &feed) {
-                format!("{} 订阅成功", feed.title)
+                format!(
+                    "《<a href=\"{}\">{}</a>》 订阅成功",
+                    Escape(&feed.link),
+                    Escape(&feed.title)
+                )
             } else {
                 "已订阅过的 RSS".into()
             }
         }
-        Err(e) => format!("订阅失败 {}", Escape(&e.to_string())),
+        Err(e) => format!("订阅失败：{}", Escape(&e.to_string())),
     };
     update_response(&cmd.bot, resp_ctx, parameters::Text::html(&msg)).await?;
     Ok(())
@@ -161,7 +174,11 @@ pub async fn unsub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> 
         }
     };
     let msg = if let Some(feed) = db.lock().unwrap().unsubscribe(target_id.0, feed_url) {
-        format!("{} 退订成功", feed.title)
+        format!(
+            "《<a href=\"{}\">{}</a>》 退订成功",
+            Escape(&feed.link),
+            Escape(&feed.title)
+        )
     } else {
         "未订阅过的 RSS".into()
     };
