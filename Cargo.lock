@@ -1083,6 +1083,7 @@ version = "2.0.0-alpha"
 dependencies = [
  "anyhow",
  "chrono",
+ "futures",
  "lazy_static",
  "once_cell",
  "quick-xml",

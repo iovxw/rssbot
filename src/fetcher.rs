@@ -2,9 +2,10 @@ use std::cmp;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use futures::{future::FutureExt, select_biased};
 use tbot::{connectors::Https, types::parameters};
 use tokio::{
-    self, select,
+    self,
     stream::StreamExt,
     sync::Notify,
     time::{self, delay_queue::DelayQueue, Duration, Instant},
@@ -26,16 +27,8 @@ pub fn start(
     let mut interval = time::interval_at(Instant::now(), Duration::from_secs(min_interval as u64));
     tokio::spawn(async move {
         loop {
-            select! {
-                _ = interval.tick() => {
-                    let feeds = db.lock().unwrap().all_feeds();
-                    for feed in feeds {
-                        let feed_interval =
-                            cmp::min(feed.ttl.map(|ttl| ttl * 60).unwrap_or(min_interval), max_interval) as u64;
-                        queue.enqueue(feed, Duration::from_secs(feed_interval));
-                    }
-                }
-                feed = queue.next() => {
+            select_biased! {
+                feed = queue.next().fuse() => {
                     let feed = feed.expect("unreachable");
                     let bot = bot.clone();
                     let db = db.clone();
@@ -45,8 +38,20 @@ pub fn start(
                         }
                     });
                 }
+                _ = interval.tick().fuse() => {
+                    let feeds = db.lock().unwrap().all_feeds();
+                    for feed in feeds {
+                        let feed_interval = cmp::min(
+                            feed.ttl.map(|ttl| ttl * 60).unwrap_or(min_interval),
+                            max_interval,
+                        ) as u64 - 1; // after -1, we can stagger with `interval`
+                        queue.enqueue(feed, Duration::from_secs(feed_interval));
+                    }
+                }
             }
         }
+
+        queue.enqueue(feed, Duration::from_secs(feed_interval));
     });
 }
 

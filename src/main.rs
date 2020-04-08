@@ -1,4 +1,5 @@
 #![feature(backtrace)]
+#![recursion_limit = "256"]
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex}; // TODO: async Mutex
