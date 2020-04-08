@@ -1358,9 +1358,9 @@ dependencies = [
 
 [[package]]
 name = "tbot"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b001b85b31398207ecfea18ae8ba937526cccc2365529c27e0793e2121939494"
+checksum = "ea50ad4d596998912bdf4eec937e49cd861246b762ce88b60288293e618d731f"
 dependencies = [
  "hyper",
  "hyper-proxy",
