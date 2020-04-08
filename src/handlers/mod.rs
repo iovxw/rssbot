@@ -34,6 +34,20 @@ impl MsgTarget {
     }
 }
 
+pub async fn start(
+    _db: Arc<Mutex<Database>>,
+    cmd: Arc<Command<Text<Https>>>,
+) -> anyhow::Result<()> {
+    let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
+    let msg = "命令列表：\n\
+               /rss       - 显示当前订阅的 RSS 列表\n\
+               /sub       - 订阅一个 RSS: /sub http://example.com/feed.xml\n\
+               /unsub     - 退订一个 RSS: /unsub http://example.com/feed.xml\n\
+               /export    - 导出为 OPML";
+    update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
+    Ok(())
+}
+
 pub async fn rss(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> anyhow::Result<()> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
@@ -96,11 +110,13 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
             feed_url = url;
         }
         [..] => {
+            let msg = "使用方法: /sub [Channel ID] <RSS URL>";
+            update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
             return Ok(());
         }
     };
     if db.lock().unwrap().is_subscribed(target_id.0, feed_url) {
-        update_response(&cmd.bot, target, parameters::Text::html("已订阅过的 RSS")).await?;
+        update_response(&cmd.bot, target, parameters::Text::plain("已订阅过的 RSS")).await?;
         return Ok(());
     }
     update_response(&cmd.bot, target, parameters::Text::plain("处理中，请稍候")).await?;
@@ -142,6 +158,8 @@ pub async fn unsub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> 
             feed_url = url;
         }
         [..] => {
+            let msg = "使用方法: /unsub [Channel ID] <RSS URL>";
+            update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
             return Ok(());
         }
     };

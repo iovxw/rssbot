@@ -72,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
     fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
+    event_loop.start(handle!(db, handlers::start));
     event_loop.command("rss", handle!(db, handlers::rss));
     event_loop.command("sub", handle!(db, handlers::sub));
     event_loop.command("unsub", handle!(db, handlers::unsub));
