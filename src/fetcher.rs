@@ -7,7 +7,7 @@ use tokio::{
     self, select,
     stream::StreamExt,
     sync::Notify,
-    time::{self, delay_queue::DelayQueue, Duration},
+    time::{self, delay_queue::DelayQueue, Duration, Instant},
 };
 
 use crate::client::pull_feed;
@@ -23,7 +23,7 @@ pub fn start(
     let mut queue = FetchQueue::new();
     // TODO: Don't use interval, it can accumulate ticks
     // replace it with delay_until
-    let mut interval = time::interval(Duration::from_secs(min_interval as u64));
+    let mut interval = time::interval_at(Instant::now(), Duration::from_secs(min_interval as u64));
     tokio::spawn(async move {
         loop {
             select! {
