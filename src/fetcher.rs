@@ -50,8 +50,6 @@ pub fn start(
                 }
             }
         }
-
-        queue.enqueue(feed, Duration::from_secs(feed_interval));
     });
 }
 
