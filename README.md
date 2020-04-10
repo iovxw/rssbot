@@ -1,4 +1,4 @@
-# rssbot [![Travis Build Status](https://travis-ci.org/iovxw/rssbot.svg)](https://travis-ci.org/iovxw/rssbot) [![Github All Releases](https://img.shields.io/github/downloads/iovxw/rssbot/total.svg)](https://github.com/iovxw/rssbot/releases)
+# rssbot [![Build Status](https://github.com/iovxw/rssbot/workflows/Rust/badge.svg)](https://github.com/iovxw/rssbot/actions?query=workflow%3ARust) [![Github All Releases](https://img.shields.io/github/downloads/iovxw/rssbot/total.svg)](https://github.com/iovxw/rssbot/releases)
 
 中文 Telegram RSS 机器人 [@RustRssBot](http://t.me/RustRssBot)
 
