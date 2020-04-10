@@ -36,7 +36,7 @@ cargo build --release
 
 编译好的文件位于: `./target/release/rssbot`
 
-## 使用
+## 运行
 
 ```
 USAGE:
