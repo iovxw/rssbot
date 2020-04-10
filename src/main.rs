@@ -32,11 +32,21 @@ struct Opt {
     #[structopt(short = "d", long, default_value = "./rssbot.json")]
     database: PathBuf,
 
-    #[structopt(long, default_value = "300")] // 5 minutes
+    #[structopt(long, default_value = "300", parse(try_from_str = parse_interval))] // 5 minutes
     min_interval: u32,
 
-    #[structopt(long, default_value = "43200")] // 12 hours
+    #[structopt(long, default_value = "43200", parse(try_from_str = parse_interval))] // 12 hours
     max_interval: u32,
+}
+
+fn parse_interval(s: &str) -> Result<u32, String> {
+    s.parse::<u32>().map_err(|e| e.to_string()).and_then(|r| {
+        if r < 1 {
+            Err("must >= 1".into())
+        } else {
+            Ok(r)
+        }
+    })
 }
 
 macro_rules! handle {
