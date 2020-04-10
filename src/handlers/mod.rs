@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use either::Either;
+use pinyin::{Pinyin, ToPinyin};
 use tbot::{
     connectors::Https,
     contexts::{Command, Text},
@@ -64,7 +66,18 @@ pub async fn rss(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
     }
 
     let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
-    let msgs = if let Some(feeds) = feeds {
+    let msgs = if let Some(mut feeds) = feeds {
+        feeds.sort_by_cached_key(|feed| {
+            feed.title
+                .chars()
+                .map(|c| {
+                    c.to_pinyin()
+                        .map(Pinyin::plain)
+                        .map(Either::Right)
+                        .unwrap_or_else(|| Either::Left(c))
+                })
+                .collect::<Vec<Either<char, &str>>>()
+        });
         format_large_msg("订阅列表：".to_string(), &feeds, |feed| {
             format!(
                 "<a href=\"{}\">{}</a>",
