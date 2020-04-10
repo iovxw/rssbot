@@ -132,6 +132,17 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
         update_response(&cmd.bot, target, parameters::Text::plain("已订阅过的 RSS")).await?;
         return Ok(());
     }
+
+    if cfg!(feature = "hosted-by-iovxw") && db.lock().unwrap().all_feeds().len() >= 1500 {
+        let msg = "已达到全局最大订阅数量, \
+                   为防止服务器压力过大请退订不需要的 RSS 或者\
+                   [自己搭建服务](https://github.com/iovxw/rssbot)\n\
+                   注: 本机器人主要用于提供即时提醒功能, 例如服务器状态监控和社区论坛提醒\n\
+                   默认更新频率为 5 分钟, 不建议用于其他类型的 RSS 订阅\n\
+                   如有相关需求推荐使用其他 RSS 机器人实现";
+        update_response(&cmd.bot, target, parameters::Text::plain(msg)).await?;
+        return Ok(());
+    }
     update_response(&cmd.bot, target, parameters::Text::plain("处理中，请稍候")).await?;
     let msg = match pull_feed(feed_url).await {
         Ok(feed) => {
