@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use futures::{future::FutureExt, select_biased};
-use tbot::{connectors::Https, types::parameters};
+use tbot::{
+    connectors::Https,
+    types::parameters::{self, WebPagePreviewState},
+};
 use tokio::{
     self,
     stream::StreamExt,
@@ -137,6 +140,7 @@ async fn push_updates<I: IntoIterator<Item = i64>>(
         'retry: for _ in 0..3 {
             match bot
                 .send_message(tbot::types::chat::Id(subscriber), msg)
+                .web_page_preview(WebPagePreviewState::Disabled)
                 .call()
                 .await
             {

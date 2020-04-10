@@ -6,7 +6,10 @@ use pinyin::{Pinyin, ToPinyin};
 use tbot::{
     connectors::Https,
     contexts::{Command, Text},
-    types::{input_file, parameters},
+    types::{
+        input_file,
+        parameters::{self, WebPagePreviewState},
+    },
 };
 
 use crate::client::pull_feed;
@@ -96,6 +99,7 @@ pub async fn rss(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
             .bot
             .send_message(chat_id, text)
             .reply_to_message_id(prev_msg)
+            .web_page_preview(WebPagePreviewState::Disabled)
             .call()
             .await?;
         prev_msg = msg.id;
@@ -244,10 +248,12 @@ async fn update_response(
     let msg = if target.first_time {
         bot.send_message(target.chat_id, message)
             .reply_to_message_id(target.message_id)
+            .web_page_preview(WebPagePreviewState::Disabled)
             .call()
             .await?
     } else {
         bot.edit_message_text(target.chat_id, target.message_id, message)
+            .web_page_preview(WebPagePreviewState::Disabled)
             .call()
             .await?
     };
