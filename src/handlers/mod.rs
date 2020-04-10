@@ -140,7 +140,7 @@ pub async fn sub(db: Arc<Mutex<Database>>, cmd: Arc<Command<Text<Https>>>) -> an
                    注: 本机器人主要用于提供即时提醒功能, 例如服务器状态监控和社区论坛提醒\n\
                    默认更新频率为 5 分钟, 不建议用于其他类型的 RSS 订阅\n\
                    如有相关需求推荐使用其他 RSS 机器人实现";
-        update_response(&cmd.bot, target, parameters::Text::plain(msg)).await?;
+        update_response(&cmd.bot, target, parameters::Text::markdown(msg)).await?;
         return Ok(());
     }
     update_response(&cmd.bot, target, parameters::Text::plain("处理中，请稍候")).await?;
