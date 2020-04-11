@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -24,15 +24,15 @@ fn gen_hash<T: Hash>(t: &T) -> u64 {
     hasher.finish()
 }
 
-type FeedID = u64;
-type SubscriberID = i64;
+type FeedId = u64;
+type SubscriberId = i64;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Feed {
     pub link: String,
     pub title: String,
     pub down_time: Option<SystemTime>,
-    pub subscribers: HashSet<SubscriberID>,
+    pub subscribers: HashSet<SubscriberId, Size64>,
     pub ttl: Option<u32>,
     hash_list: Vec<u64>,
 }
@@ -46,18 +46,16 @@ pub struct Hub {
 #[derive(Debug)]
 pub struct Database {
     path: PathBuf,
-    feeds: HashMap<FeedID, Feed>,
-    subscribers: HashMap<SubscriberID, HashSet<FeedID>>,
+    feeds: HashMap<FeedId, Feed, Size64>,
+    subscribers: HashMap<SubscriberId, HashSet<FeedId, Size64>, Size64>,
 }
 
 impl Database {
     pub fn create(path: PathBuf) -> Result<Database, DataError> {
-        let feeds: HashMap<FeedID, Feed> = HashMap::new();
-        let subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
         let result = Database {
-            path: path,
-            feeds: feeds,
-            subscribers: subscribers,
+            path,
+            feeds: HashMap::with_hasher(Size64::default()),
+            subscribers: HashMap::with_hasher(Size64::default()),
         };
 
         result.save()?;
@@ -70,24 +68,24 @@ impl Database {
             let f = File::open(&path)?;
             let feeds_list: Vec<Feed> = serde_json::from_reader(&f)?;
 
-            let mut feeds: HashMap<FeedID, Feed> = HashMap::with_capacity(feeds_list.len());
-            let mut subscribers: HashMap<SubscriberID, HashSet<FeedID>> = HashMap::new();
+            let mut feeds = HashMap::with_capacity_and_hasher(feeds_list.len(), Size64::default());
+            let mut subscribers = HashMap::with_hasher(Size64::default());
 
             for feed in feeds_list {
                 let feed_id = gen_hash(&feed.link);
                 for subscriber in &feed.subscribers {
                     let subscribed_feeds = subscribers
                         .entry(subscriber.to_owned())
-                        .or_insert_with(HashSet::new);
+                        .or_insert_with(HashSet::default);
                     subscribed_feeds.insert(feed_id);
                 }
                 feeds.insert(feed_id, feed);
             }
 
             Ok(Database {
-                path: path,
-                feeds: feeds,
-                subscribers: subscribers,
+                path,
+                feeds,
+                subscribers,
             })
         } else {
             Database::create(path)
@@ -98,11 +96,11 @@ impl Database {
         self.feeds.iter().map(|(_, v)| v.clone()).collect()
     }
 
-    pub fn all_subscribers(&self) -> Vec<SubscriberID> {
+    pub fn all_subscribers(&self) -> Vec<SubscriberId> {
         self.subscribers.iter().map(|(k, _)| *k).collect()
     }
 
-    pub fn subscribed_feeds(&self, subscriber: SubscriberID) -> Option<Vec<Feed>> {
+    pub fn subscribed_feeds(&self, subscriber: SubscriberId) -> Option<Vec<Feed>> {
         self.subscribers.get(&subscriber).map(|feeds| {
             feeds
                 .iter()
@@ -130,20 +128,20 @@ impl Database {
         feed.down_time = None;
     }
 
-    pub fn is_subscribed(&self, subscriber: SubscriberID, rss_link: &str) -> bool {
+    pub fn is_subscribed(&self, subscriber: SubscriberId, rss_link: &str) -> bool {
         self.subscribers
             .get(&subscriber)
             .map(|feeds| feeds.contains(&gen_hash(&rss_link)))
             .unwrap_or(false)
     }
 
-    pub fn subscribe(&mut self, subscriber: SubscriberID, rss_link: &str, rss: &feed::Rss) -> bool {
+    pub fn subscribe(&mut self, subscriber: SubscriberId, rss_link: &str, rss: &feed::Rss) -> bool {
         let feed_id = gen_hash(&rss_link);
         {
             let subscribed_feeds = self
                 .subscribers
                 .entry(subscriber)
-                .or_insert_with(HashSet::new);
+                .or_insert_with(HashSet::default);
             if !subscribed_feeds.insert(feed_id) {
                 return false;
             }
@@ -155,7 +153,7 @@ impl Database {
                 down_time: None,
                 ttl: rss.ttl,
                 hash_list: rss.items.iter().map(gen_item_hash).collect(),
-                subscribers: HashSet::new(),
+                subscribers: HashSet::default(),
             });
             feed.subscribers.insert(subscriber);
         }
@@ -163,7 +161,7 @@ impl Database {
         true
     }
 
-    pub fn unsubscribe(&mut self, subscriber: SubscriberID, rss_link: &str) -> Option<Feed> {
+    pub fn unsubscribe(&mut self, subscriber: SubscriberId, rss_link: &str) -> Option<Feed> {
         let feed_id = gen_hash(&rss_link);
 
         let clear_subscriber;
@@ -199,7 +197,7 @@ impl Database {
         Some(result)
     }
 
-    pub fn delete_subscriber(&mut self, subscriber: SubscriberID) {
+    pub fn delete_subscriber(&mut self, subscriber: SubscriberId) {
         self.subscribed_feeds(subscriber)
             .map(|feeds| {
                 for feed in feeds {
@@ -209,7 +207,7 @@ impl Database {
             .unwrap_or_default();
     }
 
-    pub fn update_subscriber(&mut self, from: SubscriberID, to: SubscriberID) {
+    pub fn update_subscriber(&mut self, from: SubscriberId, to: SubscriberId) {
         let feeds = self.subscribers.remove(&from).unwrap();
         for feed_id in &feeds {
             let feed = self.feeds.get_mut(&feed_id).unwrap();
@@ -289,4 +287,38 @@ fn gen_item_hash(item: &feed::Item) -> u64 {
         let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_default();
         gen_hash(&format!("{}{}", title, link))
     })
+}
+
+pub type Size64 = BuildHasherDefault<Size64Hasher>;
+
+/// A specialized hasher for u64 and i64
+///
+/// WARNING: Do not use it for user-controlled input
+#[derive(Default)]
+pub struct Size64Hasher {
+    finished: bool,
+    value: u64,
+}
+
+impl Hasher for Size64Hasher {
+    fn finish(&self) -> u64 {
+        self.value
+    }
+
+    fn write(&mut self, _bytes: &[u8]) {
+        panic!("only support u64 and i64");
+    }
+
+    fn write_u64(&mut self, i: u64) {
+        assert!(
+            !self.finished,
+            "this is a special hasher, do not write twice"
+        );
+        self.value = i;
+        self.finished = true;
+    }
+
+    fn write_i64(&mut self, i: i64) {
+        self.write_u64(i as u64);
+    }
 }
