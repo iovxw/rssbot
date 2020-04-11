@@ -322,3 +322,30 @@ impl Hasher for Size64Hasher {
         self.write_u64(i as u64);
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn size64hasher() {
+        let mut h = Size64Hasher::default();
+        h.write_i64(-42);
+        assert_eq!(h.finish(), -42i64 as u64);
+    }
+
+    #[test]
+    #[should_panic(expected = "this is a special hasher, do not write twice")]
+    fn size64hasher_write_twice() {
+        let mut h = Size64Hasher::default();
+        h.write_u64(42);
+        h.write_u64(42);
+    }
+
+    #[test]
+    #[should_panic(expected = "only support u64 and i64")]
+    fn size64hasher_other_types() {
+        let mut h = Size64Hasher::default();
+        h.write_u8(0);
+    }
+}
