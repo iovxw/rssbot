@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use tbot::{connectors::Connector, Bot};
 use tokio::{
     self,
     time::{self, Duration},
@@ -8,7 +9,7 @@ use tokio::{
 use crate::data::Database;
 use crate::BOT_ID;
 
-pub fn start_pruning(bot: tbot::Bot<tbot::connectors::Https>, db: Arc<Mutex<Database>>) {
+pub fn start_pruning(bot: Bot<impl Connector>, db: Arc<Mutex<Database>>) {
     let mut interval = time::interval(Duration::from_secs(1 * 24 * 60 * 60));
     tokio::spawn(async move {
         loop {
@@ -20,10 +21,7 @@ pub fn start_pruning(bot: tbot::Bot<tbot::connectors::Https>, db: Arc<Mutex<Data
     });
 }
 
-async fn prune(
-    bot: &tbot::Bot<tbot::connectors::Https>,
-    db: &Mutex<Database>,
-) -> anyhow::Result<()> {
+async fn prune(bot: &Bot<impl Connector>, db: &Mutex<Database>) -> anyhow::Result<()> {
     let subscribers = db.lock().unwrap().all_subscribers();
     for subscriber in subscribers {
         let chat_id = tbot::types::chat::Id(subscriber);

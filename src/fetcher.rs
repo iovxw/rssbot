@@ -7,8 +7,9 @@ use std::sync::{
 
 use futures::{future::FutureExt, select_biased};
 use tbot::{
-    connectors::Https,
+    connectors::Connector,
     types::parameters::{self, WebPagePreviewState},
+    Bot,
 };
 use tokio::{
     self,
@@ -22,7 +23,7 @@ use crate::data::{Database, Feed, FeedUpdate};
 use crate::messages::{format_large_msg, Escape};
 
 pub fn start(
-    bot: tbot::Bot<tbot::connectors::Https>,
+    bot: Bot<impl Connector>,
     db: Arc<Mutex<Database>>,
     min_interval: u32,
     max_interval: u32,
@@ -63,7 +64,7 @@ pub fn start(
 }
 
 async fn fetch_and_push_updates(
-    bot: tbot::Bot<tbot::connectors::Https>,
+    bot: Bot<impl Connector>,
     db: Arc<Mutex<Database>>,
     feed: Feed,
 ) -> Result<(), tbot::errors::MethodCall> {
@@ -136,7 +137,7 @@ async fn fetch_and_push_updates(
 }
 
 async fn push_updates<I: IntoIterator<Item = i64>>(
-    bot: &tbot::Bot<Https>,
+    bot: &Bot<impl Connector>,
     db: &Arc<Mutex<Database>>,
     subscribers: I,
     msg: parameters::Text<'_>,

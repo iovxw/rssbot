@@ -1097,6 +1097,7 @@ dependencies = [
  "chrono",
  "either",
  "futures",
+ "hyper-proxy",
  "lazy_static",
  "once_cell",
  "pinyin",
