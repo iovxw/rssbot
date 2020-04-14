@@ -4,13 +4,13 @@ use std::sync::Mutex;
 use either::Either;
 use pinyin::{Pinyin, ToPinyin};
 use tbot::{
-    Bot,
     connectors::Connector,
     contexts::{Command, Text},
     types::{
         input_file,
         parameters::{self, WebPagePreviewState},
     },
+    Bot,
 };
 
 use crate::client::pull_feed;

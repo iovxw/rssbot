@@ -103,7 +103,6 @@ fn init_bot_connector() -> ProxyConnector<tbot::connectors::Https> {
     let mut c = ProxyConnector::new(tbot::connectors::https())
         .unwrap_or_else(|e| panic!("Failed to construct a proxy connector: {}", e));
     if let Ok(ref proxy) = proxy {
-        dbg!(proxy);
         let uri = proxy
             .try_into()
             .unwrap_or_else(|e| panic!("Illegal HTTPS_PROXY: {}", e));

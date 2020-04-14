@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::{Arc, Once};
 use std::time::Duration;
 
@@ -45,12 +46,19 @@ fn client() -> Arc<reqwest::Client> {
             reqwest::header::USER_AGENT,
             reqwest::header::HeaderValue::from_str(&ua).unwrap(),
         );
-        let client = reqwest::Client::builder()
+        let mut client_builder = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .default_headers(headers)
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build()
-            .unwrap();
+            .redirect(reqwest::redirect::Policy::limited(5));
+
+        if env::var("RSSBOT_DONT_PROXY_FEEDS")
+            .or_else(|_| env::var("rssbot_dont_proxy_feeds"))
+            .is_ok()
+        {
+            client_builder = client_builder.no_proxy();
+        }
+
+        let client = client_builder.build().unwrap();
 
         unsafe {
             CLIENT = Some(Arc::new(client));
