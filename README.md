@@ -57,6 +57,13 @@ ARGS:
 
 `<token>` 请参照 [这里](https://core.telegram.org/bots#3-how-do-i-create-a-bot) 申请
 
+## 环境变量
+
+- `HTTP_PROXY`: 用于 HTTP 的代理
+- `HTTPS_PROXY`: 用于 HTTPS 的代理
+- `RSSBOT_DONT_PROXY_FEEDS`: 设为 `1` 使所有订阅的 RSS 不通过代理（仅代理 Telegram）
+- `NO_PROXY`: 暂不支持，等待 [reqwest#877](https://github.com/seanmonstar/reqwest/pull/877)
+
 ## 从旧的 RSSBot 迁移
 
 对于 [原先 Clojure 版本的 Bot](https://github.com/iovxw/tg-rss-bot), 可以使用以下脚本转换数据库
