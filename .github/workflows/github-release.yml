@@ -12,6 +12,10 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Fetch all tags
+      run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
     - name: Install Musl
       run: sudo apt install -y musl-tools
     - name: Install Rust
@@ -21,6 +25,15 @@ jobs:
         targets: x86_64-unknown-linux-musl
     - name: Build
       run: cargo build --release --target=x86_64-unknown-linux-musl
+    - name: Generate Changelog
+      id: changelog
+      run: |
+        prev_tag=$(git describe --abbrev=0 --tags ${{ github.ref }}^)
+        log=$(git log --oneline --decorate=no $prev_tag..${{ github.ref }})
+        log="${log//'%'/'%25'}"
+        log="${log//$'\n'/'%0A'}"
+        log="${log//$'\r'/'%0D'}"
+        echo "::set-output name=value::$log"
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -29,6 +42,7 @@ jobs:
       with:
         tag_name: ${{ github.ref }}
         release_name: Release ${{ github.ref }}
+        body: ${{ steps.changelog.outputs.value }}
         draft: false
         prerelease: false
     - name: Upload Release Asset
@@ -37,7 +51,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./target/x86_64-unknown-linux-musl/release/rssbot
         asset_name: rssbot-amd64-linux
         asset_content_type: application/x-elf
