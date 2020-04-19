@@ -185,7 +185,10 @@ async fn push_updates<I: IntoIterator<Item = i64>>(
 }
 
 pub fn chat_is_unavailable(s: &str) -> bool {
-    s.contains("Forbidden") || s.contains("chat not found")
+    s.contains("Forbidden")
+        || s.contains("chat not found")
+        || s.contains("have no rights")
+        || s.contains("need administrator rights")
 }
 
 #[derive(Default)]
