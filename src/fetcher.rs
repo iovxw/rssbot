@@ -74,6 +74,7 @@ async fn fetch_and_push_updates(
             let down_time = db.lock().unwrap().get_or_update_down_time(&feed.link);
             // 5 days
             if down_time.as_secs() > 5 * 24 * 60 * 60 {
+                db.lock().unwrap().reset_down_time(&feed.link);
                 let msg = format!(
                     "《<a href=\"{}\">{}</a>》\
                      已经连续 5 天拉取出错 ({}),\
