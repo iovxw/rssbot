@@ -110,22 +110,27 @@ impl Database {
         })
     }
 
-    pub fn get_or_update_down_time(&mut self, rss_link: &str) -> Duration {
+    /// Return `None` if feed not found
+    pub fn get_or_update_down_time(&mut self, rss_link: &str) -> Option<Duration> {
         let feed_id = gen_hash(&rss_link);
-        let feed = self.feeds.get_mut(&feed_id).unwrap();
+        let feed = self.feeds.get_mut(&feed_id)?;
         let now = SystemTime::now();
         if let Some(t) = feed.down_time {
-            now.duration_since(t).unwrap_or_default()
+            Some(now.duration_since(t).unwrap_or_default())
         } else {
             feed.down_time = Some(now);
-            Duration::default()
+            Some(Duration::default())
         }
     }
 
-    pub fn reset_down_time(&mut self, rss_link: &str) {
+    pub fn reset_down_time(&mut self, rss_link: &str) -> bool {
         let feed_id = gen_hash(&rss_link);
-        let feed = self.feeds.get_mut(&feed_id).unwrap();
-        feed.down_time = None;
+        self.feeds
+            .get_mut(&feed_id)
+            .map(|feed| {
+                feed.down_time = None;
+            })
+            .is_some()
     }
 
     pub fn is_subscribed(&self, subscriber: SubscriberId, rss_link: &str) -> bool {
@@ -197,30 +202,34 @@ impl Database {
         Some(result)
     }
 
-    pub fn delete_subscriber(&mut self, subscriber: SubscriberId) {
+    pub fn delete_subscriber(&mut self, subscriber: SubscriberId) -> bool {
         self.subscribed_feeds(subscriber)
             .map(|feeds| {
                 for feed in feeds {
                     let _ = self.unsubscribe(subscriber, &feed.link);
                 }
             })
-            .unwrap_or_default();
+            .is_some()
     }
 
-    pub fn update_subscriber(&mut self, from: SubscriberId, to: SubscriberId) {
-        let feeds = self.subscribers.remove(&from).unwrap();
-        for feed_id in &feeds {
-            let feed = self.feeds.get_mut(&feed_id).unwrap();
-            feed.subscribers.remove(&from);
-            feed.subscribers.insert(to);
-        }
-        self.subscribers.insert(to, feeds);
+    pub fn update_subscriber(&mut self, from: SubscriberId, to: SubscriberId) -> bool {
+        self.subscribers
+            .remove(&from)
+            .map(|feeds| {
+                for feed_id in &feeds {
+                    let feed = self.feeds.get_mut(&feed_id).unwrap();
+                    feed.subscribers.remove(&from);
+                    feed.subscribers.insert(to);
+                }
+                self.subscribers.insert(to, feeds);
+            })
+            .is_some()
     }
 
     /// Update the feed in database, return updates
     pub fn update(&mut self, rss_link: &str, new_feed: feed::Rss) -> Vec<FeedUpdate> {
         let feed_id = gen_hash(&rss_link);
-        if self.feeds.get(&feed_id).is_none() {
+        if !self.feeds.contains_key(&feed_id) {
             return Vec::new();
         }
 

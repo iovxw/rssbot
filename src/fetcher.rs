@@ -72,8 +72,12 @@ async fn fetch_and_push_updates(
         Ok(feed) => feed,
         Err(e) => {
             let down_time = db.lock().unwrap().get_or_update_down_time(&feed.link);
+            if down_time.is_none() {
+                // user unsubscribed while fetching the feed
+                return Ok(());
+            }
             // 5 days
-            if down_time.as_secs() > 5 * 24 * 60 * 60 {
+            if down_time.unwrap().as_secs() > 5 * 24 * 60 * 60 {
                 db.lock().unwrap().reset_down_time(&feed.link);
                 let msg = format!(
                     "《<a href=\"{}\">{}</a>》\
