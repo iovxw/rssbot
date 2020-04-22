@@ -3,7 +3,9 @@
 
 use std::convert::TryInto;
 use std::env;
+use std::panic;
 use std::path::PathBuf;
+use std::process;
 use std::sync::{Arc, Mutex}; // TODO: async Mutex
 
 use anyhow::Context;
@@ -70,6 +72,8 @@ macro_rules! handle {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    enable_fail_fast();
+
     let opt = Opt::from_args();
     let db = Arc::new(Mutex::new(Database::open(opt.database)?));
     let connector = init_bot_connector();
@@ -95,6 +99,15 @@ async fn main() -> anyhow::Result<()> {
 
     event_loop.polling().start().await.unwrap();
     Ok(())
+}
+
+// Exit the process when any worker thread panicked
+fn enable_fail_fast() {
+    let default_panic_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |e| {
+        default_panic_hook(e);
+        process::exit(101);
+    }));
 }
 
 fn init_bot_connector() -> ProxyConnector<tbot::connectors::Https> {
