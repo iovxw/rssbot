@@ -62,8 +62,7 @@ macro_rules! handle {
             let future = f(env.clone(), cmd);
             async {
                 if let Err(e) = future.await {
-                    dbg!(&e);
-                    dbg!(e.backtrace());
+                    print_error(e);
                 }
             }
         }
@@ -123,4 +122,32 @@ fn init_bot_connector() -> ProxyConnector<tbot::connectors::Https> {
         c.add_proxy(proxy);
     }
     c
+}
+
+fn print_error<E: std::error::Error>(err: E) {
+    eprintln!("Error: {}", err);
+    let mut deepest_backtrace = err.backtrace();
+
+    let mut err: &dyn std::error::Error = &err;
+    if let Some(e) = err.source() {
+        eprintln!("\nCaused by:");
+        let multiple = e.source().is_some();
+        let mut line_counter = 0..;
+        while let (Some(e), Some(line)) = (err.source(), line_counter.next()) {
+            if multiple {
+                eprint!("{: >4}: ", line)
+            } else {
+                eprint!("    ")
+            };
+            eprintln!("{}", e);
+            if let Some(backtrace) = e.backtrace() {
+                deepest_backtrace = Some(backtrace);
+            }
+            err = e;
+        }
+    }
+
+    if let Some(backtrace) = deepest_backtrace {
+        eprintln!("\nBacktrace:\n{}", backtrace);
+    }
 }

@@ -44,7 +44,7 @@ pub fn start(
                     tokio::spawn(async move {
                         opportunity.wait().await;
                         if let Err(e) = fetch_and_push_updates(bot, db, feed).await {
-                            dbg!(e);
+                            crate::print_error(e);
                         }
                     });
                 }

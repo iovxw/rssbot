@@ -15,13 +15,16 @@ pub fn start_pruning(bot: Bot<impl Connector>, db: Arc<Mutex<Database>>) {
         loop {
             interval.tick().await;
             if let Err(e) = prune(&bot, &db).await {
-                dbg!(e);
+                crate::print_error(e);
             }
         }
     });
 }
 
-async fn prune(bot: &Bot<impl Connector>, db: &Mutex<Database>) -> anyhow::Result<()> {
+async fn prune(
+    bot: &Bot<impl Connector>,
+    db: &Mutex<Database>,
+) -> Result<(), tbot::errors::MethodCall> {
     let subscribers = db.lock().unwrap().all_subscribers();
     for subscriber in subscribers {
         let chat_id = tbot::types::chat::Id(subscriber);

@@ -43,7 +43,7 @@ impl MsgTarget {
 pub async fn start(
     _db: Arc<Mutex<Database>>,
     cmd: Arc<Command<Text<impl Connector>>>,
-) -> anyhow::Result<()> {
+) -> Result<(), tbot::errors::MethodCall> {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
     let msg = "命令列表：\n\
                /rss       - 显示当前订阅的 RSS 列表\n\
@@ -57,7 +57,7 @@ pub async fn start(
 pub async fn rss(
     db: Arc<Mutex<Database>>,
     cmd: Arc<Command<Text<impl Connector>>>,
-) -> anyhow::Result<()> {
+) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
@@ -114,7 +114,7 @@ pub async fn rss(
 pub async fn sub(
     db: Arc<Mutex<Database>>,
     cmd: Arc<Command<Text<impl Connector>>>,
-) -> anyhow::Result<()> {
+) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let text = &cmd.text.value;
     let args = text.split_whitespace().collect::<Vec<_>>();
@@ -167,7 +167,7 @@ pub async fn sub(
                 "已订阅过的 RSS".into()
             }
         }
-        Err(e) => format!("订阅失败：{}", Escape(&e.to_string())),
+        Err(e) => format!("订阅失败：{}", Escape(&e.to_user_friendly())),
     };
     update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
     Ok(())
@@ -176,7 +176,7 @@ pub async fn sub(
 pub async fn unsub(
     db: Arc<Mutex<Database>>,
     cmd: Arc<Command<Text<impl Connector>>>,
-) -> anyhow::Result<()> {
+) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let text = &cmd.text.value;
     let args = text.split_whitespace().collect::<Vec<_>>();
@@ -217,7 +217,7 @@ pub async fn unsub(
 pub async fn export(
     db: Arc<Mutex<Database>>,
     cmd: Arc<Command<Text<impl Connector>>>,
-) -> anyhow::Result<()> {
+) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
