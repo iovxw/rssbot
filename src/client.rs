@@ -2,7 +2,10 @@ use std::env;
 use std::sync::{Arc, Once};
 use std::time::Duration;
 
-use reqwest;
+use reqwest::{
+    self,
+    header::{HeaderValue, CONTENT_TYPE},
+};
 use thiserror::Error;
 
 use crate::feed::Rss;
@@ -39,15 +42,25 @@ pub async fn pull_feed(url: &str) -> Result<Rss, FeedError> {
             return Err(FeedError::TooLarge);
         }
     }
-    let mut buf = Vec::new(); // TODO: capacity?
-    while let Some(bytes) = resp.chunk().await? {
-        if buf.len() + bytes.len() > RESP_SIZE_LIMIT {
-            return Err(FeedError::TooLarge);
-        }
-        buf.extend_from_slice(&bytes);
-    }
 
-    let feed = crate::feed::parse(std::io::Cursor::new(buf))?;
+    let feed = if url.ends_with(".json")
+        || matches!(
+            resp.headers().get(CONTENT_TYPE),
+            Some(v) if content_type_is_json(v)
+        ) {
+        resp.json().await?
+    } else {
+        let mut buf = Vec::new(); // TODO: capacity?
+        while let Some(bytes) = resp.chunk().await? {
+            if buf.len() + bytes.len() > RESP_SIZE_LIMIT {
+                return Err(FeedError::TooLarge);
+            }
+            buf.extend_from_slice(&bytes);
+        }
+
+        crate::feed::parse(std::io::Cursor::new(buf))?
+    };
+
     Ok(crate::feed::fix_relative_url(feed, url))
 }
 
@@ -90,6 +103,18 @@ fn client() -> Arc<reqwest::Client> {
     });
 
     unsafe { CLIENT.clone() }.unwrap()
+}
+
+fn content_type_is_json(value: &HeaderValue) -> bool {
+    value
+        .to_str()
+        .map(|value| {
+            value
+                .split(';')
+                .map(|v| v.trim())
+                .any(|v| v == "application/json")
+        })
+        .unwrap_or(false)
 }
 
 // TODO: const fn?

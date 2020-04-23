@@ -11,6 +11,7 @@ use quick_xml::events::BytesStart;
 use quick_xml::events::Event as XmlEvent;
 use quick_xml::Reader as XmlReader;
 use regex::Regex;
+use serde::Deserialize;
 
 trait FromXml: Sized {
     fn from_xml<B: std::io::BufRead>(
@@ -147,10 +148,12 @@ impl FromXml for Option<String> {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct Rss {
     pub title: String,
+    #[serde(rename = "home_page_url", default)]
     pub link: String,
+    #[serde(rename = "feed_url")]
     pub source: Option<String>,
     pub ttl: Option<u32>,
     pub items: Vec<Item>,
@@ -251,9 +254,10 @@ impl FromXml for Rss {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 pub struct Item {
     pub title: Option<String>,
+    #[serde(rename = "url")]
     pub link: Option<String>,
     pub id: Option<String>,
 }
