@@ -14,6 +14,7 @@
  - [x] RSS 2.0
  - [x] Atom 0.3
  - [x] Atom 1.0
+ - [x] JSON Feed 1
 
 ## 使用
 
