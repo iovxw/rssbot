@@ -27,14 +27,9 @@ pinyin = "0.7"
 either = "1.5"
 
 [dependencies.tbot]
-version = "0.5"
-default-features = false
-features = ["rustls", "proxy"]
-
-[dependencies.hyper-proxy]
 version = "0.6"
 default-features = false
-features = ["rustls"]
+features = ["rustls", "proxy"]
 
 [dependencies.reqwest]
 version = "0.10"

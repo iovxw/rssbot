@@ -7,7 +7,6 @@ use std::sync::{
 
 use futures::{future::FutureExt, select_biased};
 use tbot::{
-    connectors::Connector,
     types::parameters::{self, WebPagePreviewState},
     Bot,
 };
@@ -22,12 +21,7 @@ use crate::client::pull_feed;
 use crate::data::{Database, Feed, FeedUpdate};
 use crate::messages::{format_large_msg, Escape};
 
-pub fn start(
-    bot: Bot<impl Connector>,
-    db: Arc<Mutex<Database>>,
-    min_interval: u32,
-    max_interval: u32,
-) {
+pub fn start(bot: Bot, db: Arc<Mutex<Database>>, min_interval: u32, max_interval: u32) {
     let mut queue = FetchQueue::new();
     // TODO: Don't use interval, it can accumulate ticks
     // replace it with delay_until
@@ -64,7 +58,7 @@ pub fn start(
 }
 
 async fn fetch_and_push_updates(
-    bot: Bot<impl Connector>,
+    bot: Bot,
     db: Arc<Mutex<Database>>,
     feed: Feed,
 ) -> Result<(), tbot::errors::MethodCall> {
@@ -85,7 +79,7 @@ async fn fetch_and_push_updates(
                      可能已经关闭, 请取消订阅",
                     Escape(&feed.link),
                     Escape(&feed.title),
-                    Escape(&e.to_string())
+                    Escape(&e.to_user_friendly())
                 );
                 push_updates(&bot, &db, feed.subscribers, parameters::Text::html(&msg)).await?;
             }
@@ -142,7 +136,7 @@ async fn fetch_and_push_updates(
 }
 
 async fn push_updates<I: IntoIterator<Item = i64>>(
-    bot: &Bot<impl Connector>,
+    bot: &Bot,
     db: &Arc<Mutex<Database>>,
     subscribers: I,
     msg: parameters::Text<'_>,

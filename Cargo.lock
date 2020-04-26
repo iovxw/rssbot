@@ -1097,7 +1097,6 @@ dependencies = [
  "chrono",
  "either",
  "futures",
- "hyper-proxy",
  "lazy_static",
  "once_cell",
  "pinyin",
@@ -1374,10 +1373,11 @@ dependencies = [
 
 [[package]]
 name = "tbot"
-version = "0.5.3"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea50ad4d596998912bdf4eec937e49cd861246b762ce88b60288293e618d731f"
+checksum = "45a0cfbd0ddb2e6c3a7366ca0fa0cc40025cb5d20c273602199462376cd4f2f6"
 dependencies = [
+ "futures",
  "hyper",
  "hyper-proxy",
  "hyper-rustls 0.19.1",

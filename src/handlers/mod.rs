@@ -4,7 +4,6 @@ use std::sync::Mutex;
 use either::Either;
 use pinyin::{Pinyin, ToPinyin};
 use tbot::{
-    connectors::Connector,
     contexts::{Command, Text},
     types::{
         input_file,
@@ -42,7 +41,7 @@ impl MsgTarget {
 
 pub async fn start(
     _db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text<impl Connector>>>,
+    cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
     let msg = "命令列表：\n\
@@ -56,7 +55,7 @@ pub async fn start(
 
 pub async fn rss(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text<impl Connector>>>,
+    cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
@@ -113,7 +112,7 @@ pub async fn rss(
 
 pub async fn sub(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text<impl Connector>>>,
+    cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let text = &cmd.text.value;
@@ -175,7 +174,7 @@ pub async fn sub(
 
 pub async fn unsub(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text<impl Connector>>>,
+    cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let text = &cmd.text.value;
@@ -216,7 +215,7 @@ pub async fn unsub(
 
 pub async fn export(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text<impl Connector>>>,
+    cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
@@ -251,7 +250,7 @@ pub async fn export(
 }
 
 async fn update_response(
-    bot: &Bot<impl Connector>,
+    bot: &Bot,
     target: &mut MsgTarget,
     message: parameters::Text<'_>,
 ) -> Result<(), tbot::errors::MethodCall> {
@@ -272,7 +271,7 @@ async fn update_response(
 }
 
 async fn check_channel_permission(
-    bot: &Bot<impl Connector>,
+    bot: &Bot,
     channel: &str,
     target: &mut MsgTarget,
     user_id: tbot::types::user::Id,

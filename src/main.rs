@@ -9,10 +9,12 @@ use std::process;
 use std::sync::{Arc, Mutex}; // TODO: async Mutex
 
 use anyhow::Context;
-use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use once_cell::sync::OnceCell;
 use structopt::StructOpt;
-use tbot;
+use tbot::{
+    self,
+    proxy::{Intercept, Proxy},
+};
 use tokio;
 
 mod client;
@@ -75,8 +77,11 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Opt::from_args();
     let db = Arc::new(Mutex::new(Database::open(opt.database)?));
-    let connector = init_bot_connector();
-    let bot = tbot::Bot::with_connector(opt.token, connector);
+    let bot = if let Some(proxy) = init_proxy() {
+        tbot::Bot::with_proxy(opt.token, proxy)
+    } else {
+        tbot::Bot::new(opt.token)
+    };
     let me = bot
         .get_me()
         .call()
@@ -109,19 +114,17 @@ fn enable_fail_fast() {
     }));
 }
 
-fn init_bot_connector() -> ProxyConnector<tbot::connectors::Https> {
+fn init_proxy() -> Option<Proxy> {
     // Telegram Bot API only uses https, no need to check http_proxy
-    let proxy = env::var("HTTPS_PROXY").or_else(|_| env::var("https_proxy"));
-    let mut c = ProxyConnector::new(tbot::connectors::https())
-        .unwrap_or_else(|e| panic!("Failed to construct a proxy connector: {}", e));
-    if let Ok(ref proxy) = proxy {
-        let uri = proxy
-            .try_into()
-            .unwrap_or_else(|e| panic!("Illegal HTTPS_PROXY: {}", e));
-        let proxy = Proxy::new(Intercept::All, uri);
-        c.add_proxy(proxy);
-    }
-    c
+    env::var("HTTPS_PROXY")
+        .or_else(|_| env::var("https_proxy"))
+        .map(|uri| {
+            let uri = uri
+                .try_into()
+                .unwrap_or_else(|e| panic!("Illegal HTTPS_PROXY: {}", e));
+            Proxy::new(Intercept::All, uri)
+        })
+        .ok()
 }
 
 fn print_error<E: std::error::Error>(err: E) {
