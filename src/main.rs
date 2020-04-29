@@ -38,12 +38,17 @@ struct Opt {
     /// Path to database
     #[structopt(short = "d", long, default_value = "./rssbot.json")]
     database: PathBuf,
-
-    #[structopt(long, default_value = "300", parse(try_from_str = parse_interval))] // 5 minutes
+    /// Minimum fetch interval, seconds
+    #[structopt(long, default_value = "300", parse(try_from_str = parse_interval))]
+    // 5 minutes
     min_interval: u32,
-
-    #[structopt(long, default_value = "43200", parse(try_from_str = parse_interval))] // 12 hours
+    /// Maximum fetch interval, seconds
+    #[structopt(long, default_value = "43200", parse(try_from_str = parse_interval))]
+    // 12 hours
     max_interval: u32,
+    /// DANGER: Insecure mode, accept invalid TLS certificates
+    #[structopt(long)]
+    insecure: bool,
 }
 
 fn parse_interval(s: &str) -> Result<u32, String> {
@@ -88,7 +93,10 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("Initialization failed, check your network and Telegram token")?;
 
-    BOT_NAME.set(me.user.username.clone().unwrap()).unwrap();
+    let bot_name = me.user.username.clone().unwrap();
+    crate::client::init_client(&bot_name, opt.insecure);
+
+    BOT_NAME.set(bot_name).unwrap();
     BOT_ID.set(me.user.id).unwrap();
 
     gardener::start_pruning(bot.clone(), db.clone());

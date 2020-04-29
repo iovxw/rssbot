@@ -43,16 +43,17 @@ cargo build --release
 
 ```
 USAGE:
-    rssbot [OPTIONS] <token>
+    rssbot [FLAGS] [OPTIONS] <token>
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    -h, --help        Prints help information
+        --insecure    DANGER: Insecure mode, accept invalid TLS certificates
+    -V, --version     Prints version information
 
 OPTIONS:
     -d, --database <database>            Path to database [default: ./rssbot.json]
-        --max-interval <max-interval>     [default: 43200]
-        --min-interval <min-interval>     [default: 300]
+        --max-interval <max-interval>    Maximum fetch interval, seconds [default: 43200]
+        --min-interval <min-interval>    Minimum fetch interval, seconds [default: 300]
 
 ARGS:
     <token>    Telegram bot token
