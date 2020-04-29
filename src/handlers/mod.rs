@@ -18,6 +18,17 @@ use crate::messages::{format_large_msg, Escape};
 
 mod opml;
 
+macro_rules! reject_cmd_from_channel {
+    ($cmd: tt, $target: tt) => {{
+        use tbot::contexts::fields::Message;
+        if $cmd.chat().kind.is_channel() {
+            let msg = "请在私聊中使用命令为频道管理订阅";
+            update_response(&$cmd.bot, $target, parameters::Text::plain(&msg)).await?;
+            return Ok(());
+        }
+    }};
+}
+
 #[derive(Debug, Copy, Clone)]
 struct MsgTarget {
     chat_id: tbot::types::chat::Id,
@@ -44,6 +55,7 @@ pub async fn start(
     cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
+    reject_cmd_from_channel!(cmd, target);
     let msg = "命令列表：\n\
                /rss       - 显示当前订阅的 RSS 列表\n\
                /sub       - 订阅一个 RSS: /sub http://example.com/feed.xml\n\
@@ -61,6 +73,7 @@ pub async fn rss(
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
+    reject_cmd_from_channel!(cmd, target);
 
     if !channel.is_empty() {
         let user_id = cmd.from.as_ref().unwrap().id;
@@ -120,6 +133,7 @@ pub async fn sub(
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;
+    reject_cmd_from_channel!(cmd, target);
 
     match &*args {
         [url] => feed_url = url,
@@ -182,6 +196,7 @@ pub async fn unsub(
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;
+    reject_cmd_from_channel!(cmd, target);
 
     match &*args {
         [url] => feed_url = url,
@@ -221,6 +236,7 @@ pub async fn export(
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
+    reject_cmd_from_channel!(cmd, target);
 
     if !channel.is_empty() {
         let user_id = cmd.from.as_ref().unwrap().id;
