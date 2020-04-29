@@ -58,10 +58,12 @@ pub async fn start(
     reject_cmd_from_channel!(cmd, target);
     let msg = "命令列表：\n\
                /rss       - 显示当前订阅的 RSS 列表\n\
-               /sub       - 订阅一个 RSS: /sub http://example.com/feed.xml\n\
-               /unsub     - 退订一个 RSS: /unsub http://example.com/feed.xml\n\
-               /export    - 导出为 OPML";
-    update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
+               /sub       - 订阅一个 RSS：`/sub http://example.com/feed.xml`\n\
+               /unsub     - 退订一个 RSS：`/unsub http://example.com/feed.xml`\n\
+               /export    - 导出为 OPML\n\
+               所有命令均可在后面跟上频道 ID 来管理频道订阅\n\
+               例如 `/sub @BotNews http://example.com/feed.xml`";
+    update_response(&cmd.bot, target, parameters::Text::markdown(&msg)).await?;
     Ok(())
 }
 
