@@ -829,6 +829,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 
 [[package]]
+name = "paste"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3c897744f63f34f7ae3a024d9162bb5001f4ad661dd24bea0dc9f075d2de1c6"
+dependencies = [
+ "paste-impl",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "paste-impl"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66fd6f92e3594f2dd7b3fc23e42d82e292f7bcda6d8e5dcd167072327234ab89"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1373,15 +1395,16 @@ dependencies = [
 
 [[package]]
 name = "tbot"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45a0cfbd0ddb2e6c3a7366ca0fa0cc40025cb5d20c273602199462376cd4f2f6"
+checksum = "2677b50bc197fbdee41b82bf62c810d1657c53835fcc0d532196814a069155af"
 dependencies = [
  "futures",
  "hyper",
  "hyper-proxy",
  "hyper-rustls 0.19.1",
  "is-macro",
+ "paste",
  "serde",
  "serde_json",
  "tokio",
