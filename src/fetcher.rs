@@ -46,7 +46,7 @@ pub fn start(bot: Bot, db: Arc<Mutex<Database>>, min_interval: u32, max_interval
                     let feeds = db.lock().unwrap().all_feeds();
                     for feed in feeds {
                         let feed_interval = cmp::min(
-                            feed.ttl.map(|ttl| ttl * 60).unwrap_or(min_interval),
+                            cmp::max(feed.ttl.map(|ttl| ttl * 60).unwrap_or(min_interval), min_interval),
                             max_interval,
                         ) as u64 - 1; // after -1, we can stagger with `interval`
                         queue.enqueue(feed, Duration::from_secs(feed_interval));
