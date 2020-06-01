@@ -18,7 +18,7 @@ Chinese Telegram RSS bot [@RustRssBot](http://t.me/RustRssBot)
 
 ## WIP
 
-English version is still a work in progress.
+English version is still work in progress.
 
 **Unresolved problems:**
 * The command description in Telegram can't be internationalized
@@ -32,13 +32,13 @@ English version is still a work in progress.
 
 ## Download
 
-The pre-compiled binaries can be downloaded directly from [Releases](https://github.com/iovxw/rssbot/releases), the Linux version is statically linked to *musl*, no other dependencies required.
+The pre-compiled binaries can be downloaded directly from [Releases](https://github.com/iovxw/rssbot/releases). The Linux version is statically linked to *musl*, no other dependencies required.
 
 ## Compile
 
 **Please try to download from the Link above, if that's not feasible or you have other requirements you should compile manually**
 
-Install *Rust Nightly* and *Cargo* (`rustup`](https://www.rustup.rs/)) first, then:
+Install *Rust Nightly* and *Cargo* ([`rustup` recommended](https://www.rustup.rs/)) first, then:
 
 ```
 cargo build --release
@@ -73,7 +73,7 @@ Please read the [official docs](https://core.telegram.org/bots#3-how-do-i-create
 - `HTTP_PROXY`: Proxy for HTTP
 - `HTTPS_PROXY`: Proxy for HTTPS
 - `RSSBOT_DONT_PROXY_FEEDS`: Set to `1` to limit the proxy to Telegram requests
-- `NO_PROXY`: Not supported yet, wait for [request#877](https://github.com/seanmonstar/reqwest/pull/877)
+- `NO_PROXY`: Not supported yet, wait for [reqwest#877](https://github.com/seanmonstar/reqwest/pull/877)
 
 ## Migrating from the old RSSBot
 
