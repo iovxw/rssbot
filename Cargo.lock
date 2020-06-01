@@ -224,9 +224,9 @@ dependencies = [
 
 [[package]]
 name = "ctl10n"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18c363121e7727f11cd3bba9ee92e9962a8d1544e2a3295b9c0c56dc0d4a7ad9"
+checksum = "b832db1c17827bf8b0fbedf1fd919d125fd7047e50c0ac322c519eb6ba79290f"
 dependencies = [
  "quote",
  "toml",

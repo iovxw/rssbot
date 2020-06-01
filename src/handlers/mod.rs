@@ -174,8 +174,8 @@ pub async fn sub(
     let msg = match pull_feed(feed_url).await {
         Ok(feed) => {
             if db.lock().unwrap().subscribe(target_id.0, feed_url, &feed) {
-                format!(
-                    clt10n_tr_inner!("subscription_succeeded"),
+                tr!(
+                    "subscription_succeeded",
                     link = Escape(&feed.link),
                     title = Escape(&feed.title)
                 )
@@ -183,8 +183,8 @@ pub async fn sub(
                 tr!("subscribed_to_rss").into()
             }
         }
-        Err(e) => format!(
-            clt10n_tr_inner!("subscription_failed"),
+        Err(e) => tr!(
+            "subscription_failed",
             error = Escape(&e.to_user_friendly())
         ),
     };
@@ -222,8 +222,8 @@ pub async fn unsub(
         }
     };
     let msg = if let Some(feed) = db.lock().unwrap().unsubscribe(target_id.0, feed_url) {
-        format!(
-            clt10n_tr_inner!("unsubscription_succeeded"),
+        tr!(
+            "unsubscription_succeeded",
             link = Escape(&feed.link),
             title = Escape(&feed.title)
         )
@@ -322,7 +322,7 @@ async fn check_channel_permission(
             ..
         }) => {
             let msg = tr!("unable_to_find_target_channel", desc = description);
-            update_response(bot, target, parameters::Text::plain(msg)).await?;
+            update_response(bot, target, parameters::Text::plain(&msg)).await?;
             return Ok(None);
         }
         other => other?,
@@ -343,7 +343,7 @@ async fn check_channel_permission(
             ..
         }) => {
             let msg = tr!("unable_to_get_channel_info", desc = description);
-            update_response(bot, target, parameters::Text::plain(msg)).await?;
+            update_response(bot, target, parameters::Text::plain(&msg)).await?;
             return Ok(None);
         }
         other => other?,

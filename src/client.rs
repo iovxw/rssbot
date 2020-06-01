@@ -14,11 +14,7 @@ const RESP_SIZE_LIMIT: usize = 2 * 1024 * 1024;
 
 static CLIENT: OnceCell<reqwest::Client> = OnceCell::new();
 
-#[macro_use]
-mod ctl10n {
-    #![allow(unused_macros)]
-    include! { "../ctl10n_macros.rs" }
-}
+include! { "../ctl10n_macros.rs" }
 
 #[derive(Error, Debug)]
 pub enum FeedError {
@@ -33,10 +29,10 @@ pub enum FeedError {
 impl FeedError {
     pub fn to_user_friendly(&self) -> String {
         match self {
-            Self::Network(source) => format!(clt10n_tr_inner!("network_error"), source = source),
-            Self::Parsing(source) => format!(clt10n_tr_inner!("parsing_error"), source = source),
-            Self::TooLarge => format!(
-                clt10n_tr_inner!("rss_size_limit_exceeded"),
+            Self::Network(source) => tr!("network_error", source = source),
+            Self::Parsing(source) => tr!("parsing_error", source = source),
+            Self::TooLarge => tr!(
+                "rss_size_limit_exceeded",
                 size = format_byte_size(RESP_SIZE_LIMIT as u64)
             ),
         }

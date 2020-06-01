@@ -11,7 +11,7 @@ default = []
 hosted-by-iovxw = []
 
 [build-dependencies]
-ctl10n = "0.1.0"
+ctl10n = "0.2.0"
 
 [dependencies]
 lazy_static = "1.4"
