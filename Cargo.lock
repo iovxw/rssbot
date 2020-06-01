@@ -223,6 +223,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctl10n"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18c363121e7727f11cd3bba9ee92e9962a8d1544e2a3295b9c0c56dc0d4a7ad9"
+dependencies = [
+ "quote",
+ "toml",
+]
+
+[[package]]
 name = "dtoa"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1110,6 +1120,7 @@ version = "2.0.0-alpha.5"
 dependencies = [
  "anyhow",
  "chrono",
+ "ctl10n",
  "either",
  "futures",
  "lazy_static",
@@ -1492,6 +1503,15 @@ dependencies = [
  "log",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "toml"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffc92d160b1eef40665be3a05630d003936a3bc7da7421277846c2613e92c71a"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

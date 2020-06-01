@@ -18,11 +18,13 @@ use crate::messages::{format_large_msg, Escape};
 
 mod opml;
 
+include! { "../../ctl10n_macros.rs" }
+
 macro_rules! reject_cmd_from_channel {
     ($cmd: tt, $target: tt) => {{
         use tbot::contexts::fields::Message;
         if $cmd.chat().kind.is_channel() {
-            let msg = "请在私聊中使用命令为频道管理订阅";
+            let msg = tr!("commands_in_private_channel");
             update_response(&$cmd.bot, $target, parameters::Text::plain(&msg)).await?;
             return Ok(());
         }
@@ -56,13 +58,7 @@ pub async fn start(
 ) -> Result<(), tbot::errors::MethodCall> {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
     reject_cmd_from_channel!(cmd, target);
-    let msg = "命令列表：\n\
-               /rss       - 显示当前订阅的 RSS 列表\n\
-               /sub       - 订阅一个 RSS：`/sub http://example.com/feed.xml`\n\
-               /unsub     - 退订一个 RSS：`/unsub http://example.com/feed.xml`\n\
-               /export    - 导出为 OPML\n\
-               所有命令均可在后面跟上频道 ID 来管理频道订阅\n\
-               例如 `/sub @BotNews http://example.com/feed.xml`";
+    let msg = tr!("start_message");
     update_response(&cmd.bot, target, parameters::Text::markdown(&msg)).await?;
     Ok(())
 }
@@ -99,7 +95,7 @@ pub async fn rss(
                 })
                 .collect::<Vec<Either<char, &str>>>()
         });
-        format_large_msg("订阅列表：".to_string(), &feeds, |feed| {
+        format_large_msg(tr!("subscription_list").to_string(), &feeds, |feed| {
             format!(
                 "<a href=\"{}\">{}</a>",
                 Escape(&feed.link),
@@ -107,7 +103,7 @@ pub async fn rss(
             )
         })
     } else {
-        vec!["订阅列表为空".to_string()]
+        vec![tr!("subscription_list_empty").to_string()]
     };
 
     let mut prev_msg = cmd.message_id;
@@ -149,40 +145,48 @@ pub async fn sub(
             feed_url = url;
         }
         [..] => {
-            let msg = "使用方法: /sub [Channel ID] <RSS URL>";
+            let msg = tr!("sub_how_to_use");
             update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
             return Ok(());
         }
     };
     if db.lock().unwrap().is_subscribed(target_id.0, feed_url) {
-        update_response(&cmd.bot, target, parameters::Text::plain("已订阅过的 RSS")).await?;
+        update_response(
+            &cmd.bot,
+            target,
+            parameters::Text::plain(tr!("subscribed_to_rss")),
+        )
+        .await?;
         return Ok(());
     }
 
     if cfg!(feature = "hosted-by-iovxw") && db.lock().unwrap().all_feeds().len() >= 1500 {
-        let msg = "已达到全局最大订阅数量, \
-                   为防止服务器压力过大请退订不需要的 RSS 或者\
-                   [自己搭建服务](https://github.com/iovxw/rssbot)\n\
-                   注: 本机器人主要用于提供即时提醒功能, 例如服务器状态监控和社区论坛提醒\n\
-                   默认更新频率为 5 分钟, 不建议用于其他类型的 RSS 订阅\n\
-                   如有相关需求推荐使用其他 RSS 机器人实现";
+        let msg = tr!("subscription_rate_limit");
         update_response(&cmd.bot, target, parameters::Text::markdown(msg)).await?;
         return Ok(());
     }
-    update_response(&cmd.bot, target, parameters::Text::plain("处理中，请稍候")).await?;
+    update_response(
+        &cmd.bot,
+        target,
+        parameters::Text::plain(tr!("processing_please_wait")),
+    )
+    .await?;
     let msg = match pull_feed(feed_url).await {
         Ok(feed) => {
             if db.lock().unwrap().subscribe(target_id.0, feed_url, &feed) {
                 format!(
-                    "《<a href=\"{}\">{}</a>》 订阅成功",
-                    Escape(&feed.link),
-                    Escape(&feed.title)
+                    clt10n_tr_inner!("subscription_succeeded"),
+                    link = Escape(&feed.link),
+                    title = Escape(&feed.title)
                 )
             } else {
-                "已订阅过的 RSS".into()
+                tr!("subscribed_to_rss").into()
             }
         }
-        Err(e) => format!("订阅失败：{}", Escape(&e.to_user_friendly())),
+        Err(e) => format!(
+            clt10n_tr_inner!("subscription_failed"),
+            error = Escape(&e.to_user_friendly())
+        ),
     };
     update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
     Ok(())
@@ -212,19 +216,19 @@ pub async fn unsub(
             feed_url = url;
         }
         [..] => {
-            let msg = "使用方法: /unsub [Channel ID] <RSS URL>";
+            let msg = tr!("unsub_how_to_use");
             update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
             return Ok(());
         }
     };
     let msg = if let Some(feed) = db.lock().unwrap().unsubscribe(target_id.0, feed_url) {
         format!(
-            "《<a href=\"{}\">{}</a>》 退订成功",
-            Escape(&feed.link),
-            Escape(&feed.title)
+            clt10n_tr_inner!("unsubscription_succeeded"),
+            link = Escape(&feed.link),
+            title = Escape(&feed.title)
         )
     } else {
-        "未订阅过的 RSS".into()
+        tr!("unsubscribed_from_rss").into()
     };
     update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
     Ok(())
@@ -251,7 +255,12 @@ pub async fn export(
 
     let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
     if feeds.is_none() {
-        update_response(&cmd.bot, target, parameters::Text::plain("订阅列表为空")).await?;
+        update_response(
+            &cmd.bot,
+            target,
+            parameters::Text::plain(tr!("subscription_list_empty")),
+        )
+        .await?;
         return Ok(());
     }
     let opml = opml::into_opml(feeds.unwrap());
@@ -299,7 +308,12 @@ async fn check_channel_permission(
         .parse::<i64>()
         .map(|id| parameters::ChatId::Id(id.into()))
         .unwrap_or_else(|_| parameters::ChatId::Username(channel));
-    update_response(bot, target, parameters::Text::plain("正在验证 Channel")).await?;
+    update_response(
+        bot,
+        target,
+        parameters::Text::plain(tr!("verifying_channel")),
+    )
+    .await?;
 
     let chat = match bot.get_chat(channel_id).call().await {
         Err(MethodCall::RequestError {
@@ -307,14 +321,19 @@ async fn check_channel_permission(
             error_code: 400,
             ..
         }) => {
-            let msg = format!("无法找到目标 Channel：{}", description);
-            update_response(bot, target, parameters::Text::plain(&msg)).await?;
+            let msg = tr!("unable_to_find_target_channel", desc = description);
+            update_response(bot, target, parameters::Text::plain(msg)).await?;
             return Ok(None);
         }
         other => other?,
     };
     if !chat.kind.is_channel() {
-        update_response(bot, target, parameters::Text::plain("目标需为 Channel")).await?;
+        update_response(
+            bot,
+            target,
+            parameters::Text::plain(tr!("target_must_be_a_channel")),
+        )
+        .await?;
         return Ok(None);
     }
     let admins = match bot.get_chat_administrators(channel_id).call().await {
@@ -323,8 +342,8 @@ async fn check_channel_permission(
             error_code: 400,
             ..
         }) => {
-            let msg = format!("无法获取频道信息（{}），请将本 Bot 设为管理员", description);
-            update_response(bot, target, parameters::Text::plain(&msg)).await?;
+            let msg = tr!("unable_to_get_channel_info", desc = description);
+            update_response(bot, target, parameters::Text::plain(msg)).await?;
             return Ok(None);
         }
         other => other?,
@@ -337,7 +356,7 @@ async fn check_channel_permission(
         update_response(
             bot,
             target,
-            parameters::Text::plain("该命令只能由 Channel 管理员使用"),
+            parameters::Text::plain(tr!("admin_only_command")),
         )
         .await?;
         return Ok(None);
@@ -347,12 +366,7 @@ async fn check_channel_permission(
         .find(|member| member.user.id == *crate::BOT_ID.get().unwrap())
         .is_some();
     if !bot_is_admin {
-        update_response(
-            bot,
-            target,
-            parameters::Text::plain("请将本 Bot 设为管理员"),
-        )
-        .await?;
+        update_response(bot, target, parameters::Text::plain(tr!("make_bot_admin"))).await?;
         return Ok(None);
     }
     Ok(Some(chat.id))
