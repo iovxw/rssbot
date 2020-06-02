@@ -183,10 +183,7 @@ pub async fn sub(
                 tr!("subscribed_to_rss").into()
             }
         }
-        Err(e) => tr!(
-            "subscription_failed",
-            error = Escape(&e.to_user_friendly())
-        ),
+        Err(e) => tr!("subscription_failed", error = Escape(&e.to_user_friendly())),
     };
     update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
     Ok(())

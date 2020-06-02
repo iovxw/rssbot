@@ -38,14 +38,18 @@ struct Opt {
     /// Path to database
     #[structopt(short = "d", long, default_value = "./rssbot.json")]
     database: PathBuf,
-    /// Minimum fetch interval, seconds
+    /// Minimum fetch interval in seconds
     #[structopt(long, default_value = "300", parse(try_from_str = parse_interval))]
-    // 5 minutes
+    // default is 5 minutes
     min_interval: u32,
-    /// Maximum fetch interval, seconds
+    /// Maximum fetch interval in seconds
     #[structopt(long, default_value = "43200", parse(try_from_str = parse_interval))]
-    // 12 hours
+    // default is 12 hours
     max_interval: u32,
+    /// Maximum feed size in bytes, 0 is unlimited
+    #[structopt(long, default_value = "2097152")]
+    // default is 2MiB
+    max_feed_size: u64,
     /// DANGER: Insecure mode, accept invalid TLS certificates
     #[structopt(long)]
     insecure: bool,
