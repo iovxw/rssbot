@@ -21,6 +21,8 @@ use crate::client::pull_feed;
 use crate::data::{Database, Feed, FeedUpdate};
 use crate::messages::{format_large_msg, Escape};
 
+include! { "../ctl10n_macros.rs" }
+
 pub fn start(bot: Bot, db: Arc<Mutex<Database>>, min_interval: u32, max_interval: u32) {
     let mut queue = FetchQueue::new();
     // TODO: Don't use interval, it can accumulate ticks
@@ -76,13 +78,11 @@ async fn fetch_and_push_updates(
             // 5 days
             if down_time.unwrap().as_secs() > 5 * 24 * 60 * 60 {
                 db.lock().unwrap().reset_down_time(&feed.link);
-                let msg = format!(
-                    "《<a href=\"{}\">{}</a>》\
-                     已经连续 5 天拉取出错 ({}),\
-                     可能已经关闭, 请取消订阅",
-                    Escape(&feed.link),
-                    Escape(&feed.title),
-                    Escape(&e.to_user_friendly())
+                let msg = tr!(
+                    "continuous_fetch_error",
+                    link = Escape(&feed.link),
+                    title = Escape(&feed.title),
+                    error = Escape(&e.to_user_friendly())
                 );
                 push_updates(&bot, &db, feed.subscribers, parameters::Text::html(&msg)).await?;
             }
@@ -119,11 +119,11 @@ async fn fetch_and_push_updates(
                 }
             }
             FeedUpdate::Title(new_title) => {
-                let msg = format!(
-                    "<a href=\"{}\">{}</a> 已更名为 {}",
-                    Escape(&feed.link),
-                    Escape(&feed.title),
-                    Escape(&new_title)
+                let msg = tr!(
+                    "feed_renamed",
+                    link = Escape(&feed.link),
+                    title = Escape(&feed.title),
+                    new_title = Escape(&new_title)
                 );
                 push_updates(
                     &bot,

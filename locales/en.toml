@@ -1,0 +1,36 @@
+rss_size_limit_exceeded = "RSS size limit exceeded （{size}）"
+continuous_fetch_error = "《<a href=\"{link}\">{title}</a>》has been pulled unsuccessfully for 5 consecutive days ({error}). It may have been closed, please unsubscribe."
+feed_renamed = "<a href=\"{link}\">{title}</a> has been renamed to {new_title}"
+network_error = "Network error （{source}）"
+parsing_error = "Parsing error （{source}）"
+commands_in_private_channel = "Please use commands in private chat to manage subscriptions for the channel"
+start_message = """Command list:
+/rss       - Display a list of currently subscribed RSS feeds
+/sub       - Subscribe to an RSS: `/sub http://example.com/feed.xml`
+/unsub     - Unsubscribe from an RSS: `/unsub http://example.com/feed.xml`
+/export    - Export to OPML
+All commands can be followed by the channel ID to manage channel subscriptions,
+f.e. `/sub @BotNews http://example.com/feed.xml`"""
+subscription_list = "Subscription list:"
+subscription_list_empty = "Subscription list is empty"
+sub_how_to_use = "How to use: /sub [Channel ID] <RSS URL>"
+subscribed_to_rss = "Subscribed to RSS"
+subscription_rate_limit = """The global maximum number of subscriptions has been reached.
+To prevent excessive server pressure, please unsubscribe from unnecessary RSS or
+[Build your own service](https://github.com/iovxw/rssbot).
+Note: This bot is mainly used to provide instant reminder functions,
+such as server status monitoring and community forum reminders.
+The default update frequency is 5 minutes, not recommended for other types of RSS subscriptions.
+If there are related requirements, it is recommended to use other RSS bots to achieve those."""
+processing_please_wait = "Processing, please wait"
+subscription_succeeded = "《<a href=\"{link}\">{title}</a>》 Subscription succeeded"
+subscription_failed = "Subscription failed ({error})"
+unsub_how_to_use = "How to use: /unsub [Channel ID] <RSS URL>"
+unsubscription_succeeded = "《<a href=\"{link}\">{title}</a>》 Unsubscription succeeded"
+unsubscribed_from_rss = "Unsubscribed from RSS"
+verifying_channel = "Verifying channel"
+unable_to_find_target_channel = "Unable to find the target channel: {desc}"
+target_must_be_a_channel = "Target must be a channel"
+unable_to_get_channel_info = "Unable to get channel information ({desc}), please grant this bot administrator rights"
+admin_only_command = "This command can only be used by Channel administrators"
+make_bot_admin = "Please grant this bot administrator rights"

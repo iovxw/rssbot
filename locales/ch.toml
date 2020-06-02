@@ -1,0 +1,34 @@
+rss_size_limit_exceeded = "RSS 超出大小限制（{size}）"
+continuous_fetch_error = "《<a href=\"{link}\">{title}</a>》已经连续 5 天拉取出错 ({error}), 可能已经关闭, 请取消订阅"
+feed_renamed = "<a href=\"{link}\">{title}</a> 已更名为 {new_title}"
+network_error = "网络错误（{source}）"
+parsing_error = "解析错误（{source}）"
+commands_in_private_channel = "请在私聊中使用命令为频道管理订阅"
+start_message = """命令列表：
+/rss       - 显示当前订阅的 RSS 列表
+/sub       - 订阅一个 RSS：`/sub http://example.com/feed.xml`
+/unsub     - 退订一个 RSS：`/unsub http://example.com/feed.xml`
+/export    - 导出为 OPML
+所有命令均可在后面跟上频道 ID 来管理频道订阅
+例如 `/sub @BotNews http://example.com/feed.xml`"""
+subscription_list = "订阅列表："
+subscription_list_empty = "订阅列表为空"
+sub_how_to_use = "使用方法: /sub [Channel ID] <RSS URL>"
+subscribed_to_rss = "已订阅过的 RSS"
+subscription_rate_limit = """已达到全局最大订阅数量, 为防止服务器压力过大请退订不需要的 RSS 或者
+[自己搭建服务](https://github.com/iovxw/rssbot)
+注: 本机器人主要用于提供即时提醒功能, 例如服务器状态监控和社区论坛提醒
+默认更新频率为 5 分钟, 不建议用于其他类型的 RSS 订阅
+如有相关需求推荐使用其他 RSS 机器人实现"""
+processing_please_wait = "处理中，请稍候"
+subscription_succeeded = "《<a href=\"{link}\">{title}</a>》 订阅成功"
+subscription_failed = "订阅失败: {error}"
+unsub_how_to_use = "使用方法: /unsub [Channel ID] <RSS URL>"
+unsubscription_succeeded = "《<a href=\"{link}\">{title}</a>》 退订成功"
+unsubscribed_from_rss = "未订阅过的 RSS"
+verifying_channel = "正在验证 Channel"
+unable_to_find_target_channel = "无法找到目标 Channel：{desc}"
+target_must_be_a_channel = "目标需为 Channel"
+unable_to_get_channel_info = "无法获取频道信息（{desc}），请将本 Bot 设为管理员"
+admin_only_command = "该命令只能由 Channel 管理员使用"
+make_bot_admin = "请将本 Bot 设为管理员"

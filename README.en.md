@@ -16,13 +16,6 @@ Chinese Telegram RSS bot [@RustRssBot](http://t.me/RustRssBot)
  - [x] Atom 1.0
  - [x] JSON Feed 1
 
-## WIP
-
-English version is still work in progress.
-
-**Unresolved problems:**
-* The command description in Telegram can't be internationalized
-
 ## Usage
 
     /rss       - Display a list of currently subscribed RSS feeds
@@ -32,7 +25,7 @@ English version is still work in progress.
 
 ## Download
 
-The pre-compiled binaries can be downloaded directly from [Releases](https://github.com/iovxw/rssbot/releases). The Linux version is statically linked to *musl*, no other dependencies required.
+The pre-compiled binaries can be downloaded directly from [Releases](https://github.com/iovxw/rssbot/releases). Make sure to use the english binary (`rssbot-en-amd64-linux`). The Linux version is statically linked to *musl*, no other dependencies required.
 
 ## Compile
 
@@ -41,7 +34,7 @@ The pre-compiled binaries can be downloaded directly from [Releases](https://git
 Install *Rust Nightly* and *Cargo* ([`rustup` recommended](https://www.rustup.rs/)) first, then:
 
 ```
-cargo build --release
+LOCALE=en cargo build --release
 ```
 
 The compiled files are available at: `./target/release/rssbot`
