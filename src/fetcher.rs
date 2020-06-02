@@ -21,8 +21,6 @@ use crate::client::pull_feed;
 use crate::data::{Database, Feed, FeedUpdate};
 use crate::messages::{format_large_msg, Escape};
 
-include! { "../ctl10n_macros.rs" }
-
 pub fn start(bot: Bot, db: Arc<Mutex<Database>>, min_interval: u32, max_interval: u32) {
     let mut queue = FetchQueue::new();
     // TODO: Don't use interval, it can accumulate ticks

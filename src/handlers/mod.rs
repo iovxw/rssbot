@@ -18,8 +18,6 @@ use crate::messages::{format_large_msg, Escape};
 
 mod opml;
 
-include! { "../../ctl10n_macros.rs" }
-
 macro_rules! reject_cmd_from_channel {
     ($cmd: tt, $target: tt) => {{
         use tbot::contexts::fields::Message;

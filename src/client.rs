@@ -13,8 +13,6 @@ use crate::feed::Rss;
 static RESP_SIZE_LIMIT: OnceCell<u32> = OnceCell::new();
 static CLIENT: OnceCell<reqwest::Client> = OnceCell::new();
 
-include! { "../ctl10n_macros.rs" }
-
 #[derive(Error, Debug)]
 pub enum FeedError {
     #[error("network error")]

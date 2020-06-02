@@ -17,6 +17,9 @@ use tbot::{
 };
 use tokio;
 
+// Include the tr! macro and localizations
+include!(concat!(env!("OUT_DIR"), "/ctl10n_macros.rs"));
+
 mod client;
 mod data;
 mod feed;
@@ -36,14 +39,29 @@ struct Opt {
     /// Telegram bot token
     token: String,
     /// Path to database
-    #[structopt(short = "d", long, value_name = "path", default_value = "./rssbot.json")]
+    #[structopt(
+        short = "d",
+        long,
+        value_name = "path",
+        default_value = "./rssbot.json"
+    )]
     database: PathBuf,
     /// Minimum fetch interval
-    #[structopt(long, value_name = "seconds", default_value = "300", validator(check_interval))]
+    #[structopt(
+        long,
+        value_name = "seconds",
+        default_value = "300",
+        validator(check_interval)
+    )]
     // default is 5 minutes
     min_interval: u32,
     /// Maximum fetch interval
-    #[structopt(long, value_name = "seconds", default_value = "43200", validator(check_interval))]
+    #[structopt(
+        long,
+        value_name = "seconds",
+        default_value = "43200",
+        validator(check_interval)
+    )]
     // default is 12 hours
     max_interval: u32,
     /// Maximum feed size, 0 is unlimited
