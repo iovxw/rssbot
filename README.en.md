@@ -51,9 +51,10 @@ FLAGS:
     -V, --version     Prints version information
 
 OPTIONS:
-    -d, --database <database>            Path to database [default: ./rssbot.json]
-        --max-interval <max-interval>    Maximum fetch interval, seconds [default: 43200]
-        --min-interval <min-interval>    Minimum fetch interval, seconds [default: 300]
+    -d, --database <path>           Path to database [default: ./rssbot.json]
+        --max-feed-size <bytes>     Maximum feed size, 0 is unlimited [default: 2097152]
+        --max-interval <seconds>    Maximum fetch interval [default: 43200]
+        --min-interval <seconds>    Minimum fetch interval [default: 300]
 
 ARGS:
     <token>    Telegram bot token
