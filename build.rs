@@ -7,7 +7,7 @@ fn main() {
     if let Err(err) = ctl10n::convert_strings_file(
         format!(
             "locales/{}.toml",
-            &env::var("LOCALE").unwrap_or("ch".to_string())
+            &env::var("LOCALE").unwrap_or("zh".to_string())
         ),
         "ctl10n_macros.rs",
     ) {
