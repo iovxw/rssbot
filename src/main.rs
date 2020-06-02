@@ -36,18 +36,18 @@ struct Opt {
     /// Telegram bot token
     token: String,
     /// Path to database
-    #[structopt(short = "d", long, default_value = "./rssbot.json")]
+    #[structopt(short = "d", long, value_name = "path", default_value = "./rssbot.json")]
     database: PathBuf,
-    /// Minimum fetch interval in seconds
-    #[structopt(long, default_value = "300", parse(try_from_str = parse_interval))]
+    /// Minimum fetch interval
+    #[structopt(long, value_name = "seconds", default_value = "300", validator(check_interval))]
     // default is 5 minutes
     min_interval: u32,
-    /// Maximum fetch interval in seconds
-    #[structopt(long, default_value = "43200", parse(try_from_str = parse_interval))]
+    /// Maximum fetch interval
+    #[structopt(long, value_name = "seconds", default_value = "43200", validator(check_interval))]
     // default is 12 hours
     max_interval: u32,
-    /// Maximum feed size in bytes, 0 is unlimited
-    #[structopt(long, default_value = "2097152")]
+    /// Maximum feed size, 0 is unlimited
+    #[structopt(long, value_name = "bytes", default_value = "2097152")]
     // default is 2MiB
     max_feed_size: u64,
     /// DANGER: Insecure mode, accept invalid TLS certificates
@@ -55,12 +55,12 @@ struct Opt {
     insecure: bool,
 }
 
-fn parse_interval(s: &str) -> Result<u32, String> {
+fn check_interval(s: String) -> Result<(), String> {
     s.parse::<u32>().map_err(|e| e.to_string()).and_then(|r| {
         if r < 1 {
             Err("must >= 1".into())
         } else {
-            Ok(r)
+            Ok(())
         }
     })
 }
