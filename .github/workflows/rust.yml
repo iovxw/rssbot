@@ -16,3 +16,19 @@ jobs:
     - uses: actions/checkout@master
     - name: Run tests
       run: cargo test --verbose
+
+  test-locales:
+    strategy:
+      matrix:
+        locale: [zh, en]
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: nightly-2020-03-20
+    - uses: actions/checkout@master
+    - name: Check locales
+      env:
+        LOCALE: ${{ matrix.locale }}
+      run: cargo check --verbose
