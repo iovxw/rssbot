@@ -9,6 +9,7 @@ fn main() {
     for locale in LOCALES {
         println!("cargo:rerun-if-changed=locales/{}.toml", locale);
     }
+    println!("cargo:rerun-if-env-changed=LOCALE");
     if let Err(err) = ctl10n::convert_strings_file(
         format!(
             "locales/{}.toml",
