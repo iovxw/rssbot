@@ -4,7 +4,6 @@ use std::path::Path;
 use ctl10n;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=locales/*.toml");
     if let Err(err) = ctl10n::convert_strings_file(
         format!(
