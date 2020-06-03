@@ -3,8 +3,12 @@ use std::path::Path;
 
 use ctl10n;
 
+const LOCALES: &[&str] = &["zh", "en"];
+
 fn main() {
-    println!("cargo:rerun-if-changed=locales/*.toml");
+    for locale in LOCALES {
+        println!("cargo:rerun-if-changed=locales/{}.toml", locale);
+    }
     if let Err(err) = ctl10n::convert_strings_file(
         format!(
             "locales/{}.toml",
