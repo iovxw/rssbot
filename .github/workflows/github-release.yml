@@ -13,9 +13,18 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        fetch-depth: 0
+        fetch-depth: 100
     - name: Fetch all tags
       run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+    - name: Generate Changelog
+      id: changelog
+      run: |
+        prev_tag=$(git describe --abbrev=0 --tags ${{ github.ref }}^)
+        log=$(git log --oneline --decorate=no $prev_tag..${{ github.ref }})
+        log="${log//'%'/'%25'}"
+        log="${log//$'\n'/'%0A'}"
+        log="${log//$'\r'/'%0D'}"
+        echo "::set-output name=value::$log"
     - name: Install Musl
       run: sudo apt install -y musl-tools
     - name: Install Rust
@@ -31,15 +40,6 @@ jobs:
             cargo build --release --target=x86_64-unknown-linux-musl
             mv ./target/x86_64-unknown-linux-musl/release/rssbot rssbot-$LOCALE-amd64-linux
         done
-    - name: Generate Changelog
-      id: changelog
-      run: |
-        prev_tag=$(git describe --abbrev=0 --tags ${{ github.ref }}^)
-        log=$(git log --oneline --decorate=no $prev_tag..${{ github.ref }})
-        log="${log//'%'/'%25'}"
-        log="${log//$'\n'/'%0A'}"
-        log="${log//$'\r'/'%0D'}"
-        echo "::set-output name=value::$log"
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
