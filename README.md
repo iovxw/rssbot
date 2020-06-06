@@ -25,7 +25,7 @@
 
 ## 下载
 
-可直接从 [Releases](https://github.com/iovxw/rssbot/releases) 下载预编译的程序, Linux 版本为 *musl* 静态链接, 无需其他依赖
+可直接从 [Releases](https://github.com/iovxw/rssbot/releases) 下载预编译的程序（带 `zh` 的为中文版）, Linux 版本为 *musl* 静态链接, 无需其他依赖
 
 ## 编译
 
