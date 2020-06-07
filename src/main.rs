@@ -116,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
         .context("Initialization failed, check your network and Telegram token")?;
 
     let bot_name = me.user.username.clone().unwrap();
-    crate::client::init_client(&bot_name, opt.insecure);
+    crate::client::init_client(&bot_name, opt.insecure, opt.max_feed_size);
 
     BOT_NAME.set(bot_name).unwrap();
     BOT_ID.set(me.user.id).unwrap();

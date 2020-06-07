@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::feed::Rss;
 
-static RESP_SIZE_LIMIT: OnceCell<u32> = OnceCell::new();
+static RESP_SIZE_LIMIT: OnceCell<u64> = OnceCell::new();
 static CLIENT: OnceCell<reqwest::Client> = OnceCell::new();
 
 #[derive(Error, Debug)]
@@ -20,7 +20,7 @@ pub enum FeedError {
     #[error("feed parsing failed")]
     Parsing(#[from] quick_xml::Error),
     #[error("feed is too large")]
-    TooLarge(u32),
+    TooLarge(u64),
 }
 
 impl FeedError {
@@ -49,7 +49,7 @@ pub async fn pull_feed(url: &str) -> Result<Rss, FeedError> {
         .expect("RESP_SIZE_LIMIT not initialized");
     let unlimited = size_limit == 0;
     if let Some(len) = resp.content_length() {
-        if !unlimited && len > size_limit.into() {
+        if !unlimited && len > size_limit {
             return Err(FeedError::TooLarge(size_limit));
         }
     }
@@ -75,7 +75,7 @@ pub async fn pull_feed(url: &str) -> Result<Rss, FeedError> {
     Ok(crate::feed::fix_relative_url(feed, url))
 }
 
-pub fn init_client(bot_name: &str, insecue: bool) {
+pub fn init_client(bot_name: &str, insecue: bool, max_feed_size: u64) {
     let mut headers = reqwest::header::HeaderMap::new();
     let ua = format!(
         concat!(
@@ -106,6 +106,7 @@ pub fn init_client(bot_name: &str, insecue: bool) {
     let client = client_builder.build().unwrap();
 
     CLIENT.set(client).expect("CLIENT already initialized");
+    RESP_SIZE_LIMIT.set(max_feed_size).expect("RESP_SIZE_LIMIT already initialized");
 }
 
 fn content_type_is_json(value: &HeaderValue) -> bool {
