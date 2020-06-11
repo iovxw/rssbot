@@ -55,9 +55,12 @@ OPTIONS:
         --max-feed-size <bytes>     Maximum feed size, 0 is unlimited [default: 2097152]
         --max-interval <seconds>    Maximum fetch interval [default: 43200]
         --min-interval <seconds>    Minimum fetch interval [default: 300]
+        --single-user <user id>     Single user mode, only specified user can use this bot
 
 ARGS:
     <token>    Telegram bot token
+
+NOTE: You can get <user id> using bots like @userinfobot @getidsbot
 ```
 
 `<token>` 请参照 [这里](https://core.telegram.org/bots#3-how-do-i-create-a-bot) 申请
