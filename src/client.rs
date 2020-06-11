@@ -106,7 +106,9 @@ pub fn init_client(bot_name: &str, insecue: bool, max_feed_size: u64) {
     let client = client_builder.build().unwrap();
 
     CLIENT.set(client).expect("CLIENT already initialized");
-    RESP_SIZE_LIMIT.set(max_feed_size).expect("RESP_SIZE_LIMIT already initialized");
+    RESP_SIZE_LIMIT
+        .set(max_feed_size)
+        .expect("RESP_SIZE_LIMIT already initialized");
 }
 
 fn content_type_is_json(value: &HeaderValue) -> bool {

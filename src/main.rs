@@ -34,7 +34,10 @@ static BOT_NAME: OnceCell<String> = OnceCell::new();
 static BOT_ID: OnceCell<tbot::types::user::Id> = OnceCell::new();
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "A simple Telegram RSS bot.")]
+#[structopt(
+    about = "A simple Telegram RSS bot.",
+    after_help = "NOTE: You can get <user id> using bots like @userinfobot @getidsbot"
+)]
 struct Opt {
     /// Telegram bot token
     token: String,
@@ -68,6 +71,9 @@ struct Opt {
     #[structopt(long, value_name = "bytes", default_value = "2097152")]
     // default is 2MiB
     max_feed_size: u64,
+    /// Single user mode, only specified user can use this bot
+    #[structopt(long, value_name = "user id")]
+    single_user: Option<i64>,
     /// DANGER: Insecure mode, accept invalid TLS certificates
     #[structopt(long)]
     insecure: bool,
@@ -123,13 +129,17 @@ async fn main() -> anyhow::Result<()> {
 
     gardener::start_pruning(bot.clone(), db.clone());
     fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);
+
+    let owner = opt.single_user;
+    let check_command = move |cmd| async move { handlers::check_command(owner, cmd).await };
+
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
-    event_loop.start(handle!(db, handlers::start));
-    event_loop.command("rss", handle!(db, handlers::rss));
-    event_loop.command("sub", handle!(db, handlers::sub));
-    event_loop.command("unsub", handle!(db, handlers::unsub));
-    event_loop.command("export", handle!(db, handlers::export));
+    event_loop.start_if(check_command, handle!(db, handlers::start));
+    event_loop.command_if("rss", check_command, handle!(db, handlers::rss));
+    event_loop.command_if("sub", check_command, handle!(db, handlers::sub));
+    event_loop.command_if("unsub", check_command, handle!(db, handlers::unsub));
+    event_loop.command_if("export", check_command, handle!(db, handlers::export));
 
     event_loop.polling().start().await.unwrap();
     Ok(())

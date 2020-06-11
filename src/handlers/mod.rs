@@ -18,15 +18,23 @@ use crate::messages::{format_large_msg, Escape};
 
 mod opml;
 
-macro_rules! reject_cmd_from_channel {
-    ($cmd: tt, $target: tt) => {{
-        use tbot::contexts::fields::Message;
-        if $cmd.chat().kind.is_channel() {
-            let msg = tr!("commands_in_private_channel");
-            update_response(&$cmd.bot, $target, parameters::Text::plain(&msg)).await?;
-            return Ok(());
-        }
-    }};
+pub async fn check_command(owner: Option<i64>, cmd: Arc<Command<Text>>) -> bool {
+    use tbot::contexts::fields::Message;
+    let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
+    if matches!(owner, Some(owner) if owner != cmd.chat().id.0) {
+        eprintln!(
+            "Unauthenticated request from user: {}, command: {}, args: {}",
+            cmd.chat.id, cmd.command, cmd.text.value
+        );
+        return false;
+    }
+    if cmd.chat().kind.is_channel() {
+        let msg = tr!("commands_in_private_channel");
+        let _ignore_result = update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await;
+        return false;
+    }
+
+    true
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -55,7 +63,6 @@ pub async fn start(
     cmd: Arc<Command<Text>>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
-    reject_cmd_from_channel!(cmd, target);
     let msg = tr!("start_message");
     update_response(&cmd.bot, target, parameters::Text::markdown(&msg)).await?;
     Ok(())
@@ -69,7 +76,6 @@ pub async fn rss(
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
-    reject_cmd_from_channel!(cmd, target);
 
     if !channel.is_empty() {
         let user_id = cmd.from.as_ref().unwrap().id;
@@ -129,7 +135,6 @@ pub async fn sub(
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;
-    reject_cmd_from_channel!(cmd, target);
 
     match &*args {
         [url] => feed_url = url,
@@ -197,7 +202,6 @@ pub async fn unsub(
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;
-    reject_cmd_from_channel!(cmd, target);
 
     match &*args {
         [url] => feed_url = url,
@@ -237,7 +241,6 @@ pub async fn export(
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
-    reject_cmd_from_channel!(cmd, target);
 
     if !channel.is_empty() {
         let user_id = cmd.from.as_ref().unwrap().id;
