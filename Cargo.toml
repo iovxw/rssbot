@@ -37,4 +37,4 @@ features = ["rustls", "proxy"]
 [dependencies.reqwest]
 version = "0.10"
 default-features = false
-features = ["rustls-tls", "gzip", "json", "trust-dns"]
+features = ["rustls-tls", "gzip", "json"]
