@@ -21,10 +21,14 @@ mod opml;
 pub async fn check_command(owner: Option<i64>, cmd: Arc<Command<Text>>) -> bool {
     use tbot::contexts::fields::Message;
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
-    if matches!(owner, Some(owner) if owner != cmd.chat().id.0) {
+    let from = cmd
+        .from()
+        .map(|user| user.id.0)
+        .unwrap_or_else(|| cmd.chat.id.0);
+    if matches!(owner, Some(owner) if owner != from) {
         eprintln!(
-            "Unauthenticated request from user: {}, command: {}, args: {}",
-            cmd.chat.id, cmd.command, cmd.text.value
+            "Unauthenticated request from user/channel: {}, command: {}, args: {}",
+            from, cmd.command, cmd.text.value
         );
         return false;
     }
