@@ -38,7 +38,7 @@ static BOT_ID: OnceCell<tbot::types::user::Id> = OnceCell::new();
     about = "A simple Telegram RSS bot.",
     after_help = "NOTE: You can get <user id> using bots like @userinfobot @getidsbot"
 )]
-struct Opt {
+pub struct Opt {
     /// Telegram bot token
     token: String,
     /// Path to database
@@ -74,6 +74,9 @@ struct Opt {
     /// Single user mode, only specified user can use this bot
     #[structopt(long, value_name = "user id")]
     single_user: Option<i64>,
+    /// Make bot commands only accessible for group admins.
+    #[structopt(long)]
+    restricted: bool,
     /// DANGER: Insecure mode, accept invalid TLS certificates
     #[structopt(long)]
     insecure: bool,
@@ -109,11 +112,11 @@ async fn main() -> anyhow::Result<()> {
     enable_fail_fast();
 
     let opt = Opt::from_args();
-    let db = Arc::new(Mutex::new(Database::open(opt.database)?));
+    let db = Arc::new(Mutex::new(Database::open(opt.database.clone())?));
     let bot = if let Some(proxy) = init_proxy() {
-        tbot::Bot::with_proxy(opt.token, proxy)
+        tbot::Bot::with_proxy(opt.token.clone(), proxy)
     } else {
-        tbot::Bot::new(opt.token)
+        tbot::Bot::new(opt.token.clone())
     };
     let me = bot
         .get_me()
@@ -130,16 +133,23 @@ async fn main() -> anyhow::Result<()> {
     gardener::start_pruning(bot.clone(), db.clone());
     fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);
 
-    let owner = opt.single_user;
-    let check_command = move |cmd| async move { handlers::check_command(owner, cmd).await };
+    let opt = Arc::new(opt);
+    let check_command = move |cmd| {
+        let opt = opt.clone();
+        async move { handlers::check_command(&opt, cmd).await }
+    };
 
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
-    event_loop.start_if(check_command, handle!(db, handlers::start));
-    event_loop.command_if("rss", check_command, handle!(db, handlers::rss));
-    event_loop.command_if("sub", check_command, handle!(db, handlers::sub));
-    event_loop.command_if("unsub", check_command, handle!(db, handlers::unsub));
-    event_loop.command_if("export", check_command, handle!(db, handlers::export));
+    event_loop.start_if(check_command.clone(), handle!(db, handlers::start));
+    event_loop.command_if("rss", check_command.clone(), handle!(db, handlers::rss));
+    event_loop.command_if("sub", check_command.clone(), handle!(db, handlers::sub));
+    event_loop.command_if("unsub", check_command.clone(), handle!(db, handlers::unsub));
+    event_loop.command_if(
+        "export",
+        check_command.clone(),
+        handle!(db, handlers::export),
+    );
 
     event_loop.polling().start().await.unwrap();
     Ok(())

@@ -46,9 +46,10 @@ USAGE:
     rssbot [FLAGS] [OPTIONS] <token>
 
 FLAGS:
-    -h, --help        Prints help information
-        --insecure    DANGER: Insecure mode, accept invalid TLS certificates
-    -V, --version     Prints version information
+    -h, --help          Prints help information
+        --insecure      DANGER: Insecure mode, accept invalid TLS certificates
+        --restricted    Make bot commands only accessible for group admins
+    -V, --version       Prints version information
 
 OPTIONS:
     -d, --database <path>           Path to database [default: ./rssbot.json]

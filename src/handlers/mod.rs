@@ -18,24 +18,50 @@ use crate::messages::{format_large_msg, Escape};
 
 mod opml;
 
-pub async fn check_command(owner: Option<i64>, cmd: Arc<Command<Text>>) -> bool {
+pub async fn check_command(opt: &crate::Opt, cmd: Arc<Command<Text>>) -> bool {
     use tbot::contexts::fields::Message;
+    use tbot::types::chat::Kind::*;
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
     let from = cmd
         .from()
         .map(|user| user.id.0)
         .unwrap_or_else(|| cmd.chat.id.0);
-    if matches!(owner, Some(owner) if owner != from) {
+
+    // Single user mode
+    if matches!(opt.single_user, Some(owner) if owner != from) {
         eprintln!(
             "Unauthenticated request from user/channel: {}, command: {}, args: {}",
             from, cmd.command, cmd.text.value
         );
         return false;
     }
-    if cmd.chat().kind.is_channel() {
-        let msg = tr!("commands_in_private_channel");
-        let _ignore_result = update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await;
-        return false;
+
+    match cmd.chat.kind {
+        Channel { .. } => {
+            let msg = tr!("commands_in_private_channel");
+            let _ignore_result =
+                update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await;
+            return false;
+        }
+        // Restrict mode: bot commands are only accessible to admins.
+        Group { .. } | Supergroup { .. } if opt.restricted => {
+            let user_id = cmd.from.as_ref().unwrap().id;
+            let admins = match cmd.bot.get_chat_administrators(cmd.chat.id).call().await {
+                Ok(r) => r,
+                _ => return false,
+            };
+            let user_is_admin = admins.iter().any(|member| member.user.id == user_id);
+            if !user_is_admin {
+                let _ignore_result = update_response(
+                    &cmd.bot,
+                    target,
+                    parameters::Text::plain(tr!("group_admin_only_command")),
+                )
+                .await;
+            }
+            return user_is_admin;
+        }
+        _ => (),
     }
 
     true
@@ -350,15 +376,12 @@ async fn check_channel_permission(
         }
         other => other?,
     };
-    let user_is_admin = admins
-        .iter()
-        .find(|member| member.user.id == user_id)
-        .is_some();
+    let user_is_admin = admins.iter().any(|member| member.user.id == user_id);
     if !user_is_admin {
         update_response(
             bot,
             target,
-            parameters::Text::plain(tr!("admin_only_command")),
+            parameters::Text::plain(tr!("channel_admin_only_command")),
         )
         .await?;
         return Ok(None);
