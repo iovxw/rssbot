@@ -367,7 +367,7 @@ pub fn parse<B: std::io::BufRead>(reader: B) -> quick_xml::Result<Rss> {
     let bufs = BufPool::new(4, 512);
     let mut buf = bufs.pop();
     loop {
-        match dbg!(reader.read_event(&mut buf)) {
+        match reader.read_event(&mut buf) {
             Ok(XmlEvent::Start(ref e)) => match &*reader.decode(e.name()) {
                 "rss" => continue,
                 "channel" | "feed" | "rdf:RDF" => {
