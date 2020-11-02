@@ -6,10 +6,7 @@ use std::sync::{
 };
 
 use futures::{future::FutureExt, select_biased};
-use tbot::{
-    types::parameters::{self, WebPagePreviewState},
-    Bot,
-};
+use tbot::{types::parameters, Bot};
 use tokio::{
     self,
     stream::StreamExt,
@@ -82,7 +79,13 @@ async fn fetch_and_push_updates(
                     title = Escape(&feed.title),
                     error = Escape(&e.to_user_friendly())
                 );
-                push_updates(&bot, &db, feed.subscribers, parameters::Text::html(&msg)).await?;
+                push_updates(
+                    &bot,
+                    &db,
+                    feed.subscribers,
+                    parameters::Text::with_html(&msg),
+                )
+                .await?;
             }
             return Ok(());
         }
@@ -111,7 +114,7 @@ async fn fetch_and_push_updates(
                         &bot,
                         &db,
                         feed.subscribers.iter().copied(),
-                        parameters::Text::html(&msg),
+                        parameters::Text::with_html(&msg),
                     )
                     .await?;
                 }
@@ -127,7 +130,7 @@ async fn fetch_and_push_updates(
                     &bot,
                     &db,
                     feed.subscribers.iter().copied(),
-                    parameters::Text::html(&msg),
+                    parameters::Text::with_html(&msg),
                 )
                 .await?;
             }
@@ -147,7 +150,7 @@ async fn push_updates<I: IntoIterator<Item = i64>>(
         'retry: for _ in 0..3 {
             match bot
                 .send_message(tbot::types::chat::Id(subscriber), msg)
-                .web_page_preview(WebPagePreviewState::Disabled)
+                .is_web_page_preview_disabled(true)
                 .call()
                 .await
             {

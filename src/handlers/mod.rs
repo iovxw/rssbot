@@ -5,10 +5,7 @@ use either::Either;
 use pinyin::{Pinyin, ToPinyin};
 use tbot::{
     contexts::{Command, Text},
-    types::{
-        input_file,
-        parameters::{self, WebPagePreviewState},
-    },
+    types::{input_file, parameters},
     Bot,
 };
 
@@ -40,7 +37,7 @@ pub async fn check_command(opt: &crate::Opt, cmd: Arc<Command<Text>>) -> bool {
         Channel { .. } => {
             let msg = tr!("commands_in_private_channel");
             let _ignore_result =
-                update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await;
+                update_response(&cmd.bot, target, parameters::Text::with_plain(&msg)).await;
             return false;
         }
         // Restrict mode: bot commands are only accessible to admins.
@@ -55,7 +52,7 @@ pub async fn check_command(opt: &crate::Opt, cmd: Arc<Command<Text>>) -> bool {
                 let _ignore_result = update_response(
                     &cmd.bot,
                     target,
-                    parameters::Text::plain(tr!("group_admin_only_command")),
+                    parameters::Text::with_plain(tr!("group_admin_only_command")),
                 )
                 .await;
             }
@@ -94,7 +91,7 @@ pub async fn start(
 ) -> Result<(), tbot::errors::MethodCall> {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
     let msg = tr!("start_message");
-    update_response(&cmd.bot, target, parameters::Text::markdown(&msg)).await?;
+    update_response(&cmd.bot, target, parameters::Text::with_markdown(&msg)).await?;
     Ok(())
 }
 
@@ -142,12 +139,12 @@ pub async fn rss(
 
     let mut prev_msg = cmd.message_id;
     for msg in msgs {
-        let text = parameters::Text::html(&msg);
+        let text = parameters::Text::with_html(&msg);
         let msg = cmd
             .bot
             .send_message(chat_id, text)
-            .reply_to_message_id(prev_msg)
-            .web_page_preview(WebPagePreviewState::Disabled)
+            .in_reply_to(prev_msg)
+            .is_web_page_preview_disabled(true)
             .call()
             .await?;
         prev_msg = msg.id;
@@ -179,7 +176,7 @@ pub async fn sub(
         }
         [..] => {
             let msg = tr!("sub_how_to_use");
-            update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
+            update_response(&cmd.bot, target, parameters::Text::with_plain(&msg)).await?;
             return Ok(());
         }
     };
@@ -187,7 +184,7 @@ pub async fn sub(
         update_response(
             &cmd.bot,
             target,
-            parameters::Text::plain(tr!("subscribed_to_rss")),
+            parameters::Text::with_plain(tr!("subscribed_to_rss")),
         )
         .await?;
         return Ok(());
@@ -195,13 +192,13 @@ pub async fn sub(
 
     if cfg!(feature = "hosted-by-iovxw") && db.lock().unwrap().all_feeds().len() >= 1500 {
         let msg = tr!("subscription_rate_limit");
-        update_response(&cmd.bot, target, parameters::Text::markdown(msg)).await?;
+        update_response(&cmd.bot, target, parameters::Text::with_markdown(msg)).await?;
         return Ok(());
     }
     update_response(
         &cmd.bot,
         target,
-        parameters::Text::plain(tr!("processing_please_wait")),
+        parameters::Text::with_plain(tr!("processing_please_wait")),
     )
     .await?;
     let msg = match pull_feed(feed_url).await {
@@ -218,7 +215,7 @@ pub async fn sub(
         }
         Err(e) => tr!("subscription_failed", error = Escape(&e.to_user_friendly())),
     };
-    update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
+    update_response(&cmd.bot, target, parameters::Text::with_html(&msg)).await?;
     Ok(())
 }
 
@@ -246,7 +243,7 @@ pub async fn unsub(
         }
         [..] => {
             let msg = tr!("unsub_how_to_use");
-            update_response(&cmd.bot, target, parameters::Text::plain(&msg)).await?;
+            update_response(&cmd.bot, target, parameters::Text::with_plain(&msg)).await?;
             return Ok(());
         }
     };
@@ -259,7 +256,7 @@ pub async fn unsub(
     } else {
         tr!("unsubscribed_from_rss").into()
     };
-    update_response(&cmd.bot, target, parameters::Text::html(&msg)).await?;
+    update_response(&cmd.bot, target, parameters::Text::with_html(&msg)).await?;
     Ok(())
 }
 
@@ -286,7 +283,7 @@ pub async fn export(
         update_response(
             &cmd.bot,
             target,
-            parameters::Text::plain(tr!("subscription_list_empty")),
+            parameters::Text::with_plain(tr!("subscription_list_empty")),
         )
         .await?;
         return Ok(());
@@ -296,9 +293,9 @@ pub async fn export(
     cmd.bot
         .send_document(
             chat_id,
-            input_file::Document::bytes("feeds.opml", opml.as_bytes()),
+            input_file::Document::with_bytes("feeds.opml", opml.as_bytes()),
         )
-        .reply_to_message_id(cmd.message_id)
+        .in_reply_to(cmd.message_id)
         .call()
         .await?;
     Ok(())
@@ -311,13 +308,13 @@ async fn update_response(
 ) -> Result<(), tbot::errors::MethodCall> {
     let msg = if target.first_time {
         bot.send_message(target.chat_id, message)
-            .reply_to_message_id(target.message_id)
-            .web_page_preview(WebPagePreviewState::Disabled)
+            .in_reply_to(target.message_id)
+            .is_web_page_preview_disabled(true)
             .call()
             .await?
     } else {
         bot.edit_message_text(target.chat_id, target.message_id, message)
-            .web_page_preview(WebPagePreviewState::Disabled)
+            .is_web_page_preview_disabled(true)
             .call()
             .await?
     };
@@ -339,7 +336,7 @@ async fn check_channel_permission(
     update_response(
         bot,
         target,
-        parameters::Text::plain(tr!("verifying_channel")),
+        parameters::Text::with_plain(tr!("verifying_channel")),
     )
     .await?;
 
@@ -350,7 +347,7 @@ async fn check_channel_permission(
             ..
         }) => {
             let msg = tr!("unable_to_find_target_channel", desc = description);
-            update_response(bot, target, parameters::Text::plain(&msg)).await?;
+            update_response(bot, target, parameters::Text::with_plain(&msg)).await?;
             return Ok(None);
         }
         other => other?,
@@ -359,7 +356,7 @@ async fn check_channel_permission(
         update_response(
             bot,
             target,
-            parameters::Text::plain(tr!("target_must_be_a_channel")),
+            parameters::Text::with_plain(tr!("target_must_be_a_channel")),
         )
         .await?;
         return Ok(None);
@@ -371,7 +368,7 @@ async fn check_channel_permission(
             ..
         }) => {
             let msg = tr!("unable_to_get_channel_info", desc = description);
-            update_response(bot, target, parameters::Text::plain(&msg)).await?;
+            update_response(bot, target, parameters::Text::with_plain(&msg)).await?;
             return Ok(None);
         }
         other => other?,
@@ -381,7 +378,7 @@ async fn check_channel_permission(
         update_response(
             bot,
             target,
-            parameters::Text::plain(tr!("channel_admin_only_command")),
+            parameters::Text::with_plain(tr!("channel_admin_only_command")),
         )
         .await?;
         return Ok(None);
@@ -391,7 +388,12 @@ async fn check_channel_permission(
         .find(|member| member.user.id == *crate::BOT_ID.get().unwrap())
         .is_some();
     if !bot_is_admin {
-        update_response(bot, target, parameters::Text::plain(tr!("make_bot_admin"))).await?;
+        update_response(
+            bot,
+            target,
+            parameters::Text::with_plain(tr!("make_bot_admin")),
+        )
+        .await?;
         return Ok(None);
     }
     Ok(Some(chat.id))
