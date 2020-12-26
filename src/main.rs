@@ -21,12 +21,13 @@ use tokio;
 include!(concat!(env!("OUT_DIR"), "/ctl10n_macros.rs"));
 
 mod client;
+mod commands;
 mod data;
 mod feed;
 mod fetcher;
 mod gardener;
-mod handlers;
 mod messages;
+mod opml;
 
 use crate::data::Database;
 
@@ -136,19 +137,19 @@ async fn main() -> anyhow::Result<()> {
     let opt = Arc::new(opt);
     let check_command = move |cmd| {
         let opt = opt.clone();
-        async move { handlers::check_command(&opt, cmd).await }
+        async move { commands::check_command(&opt, cmd).await }
     };
 
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
-    event_loop.start_if(check_command.clone(), handle!(db, handlers::start));
-    event_loop.command_if("rss", check_command.clone(), handle!(db, handlers::rss));
-    event_loop.command_if("sub", check_command.clone(), handle!(db, handlers::sub));
-    event_loop.command_if("unsub", check_command.clone(), handle!(db, handlers::unsub));
+    event_loop.start_if(check_command.clone(), handle!(db, commands::start));
+    event_loop.command_if("rss", check_command.clone(), handle!(db, commands::rss));
+    event_loop.command_if("sub", check_command.clone(), handle!(db, commands::sub));
+    event_loop.command_if("unsub", check_command.clone(), handle!(db, commands::unsub));
     event_loop.command_if(
         "export",
         check_command.clone(),
-        handle!(db, handlers::export),
+        handle!(db, commands::export),
     );
 
     event_loop.polling().start().await.unwrap();
