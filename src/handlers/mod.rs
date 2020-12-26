@@ -114,7 +114,7 @@ pub async fn rss(
     }
 
     let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
-    let msgs = if let Some(mut feeds) = feeds {
+    let mut msgs = if let Some(mut feeds) = feeds {
         feeds.sort_by_cached_key(|feed| {
             feed.title
                 .chars()
@@ -137,7 +137,10 @@ pub async fn rss(
         vec![tr!("subscription_list_empty").to_string()]
     };
 
-    let mut prev_msg = cmd.message_id;
+    let first_msg = msgs.remove(0);
+    update_response(&cmd.bot, target, parameters::Text::with_html(&first_msg)).await?;
+
+    let mut prev_msg = target.message_id;
     for msg in msgs {
         let text = parameters::Text::with_html(&msg);
         let msg = cmd
