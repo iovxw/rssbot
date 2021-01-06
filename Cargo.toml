@@ -35,6 +35,6 @@ default-features = false
 features = ["rustls", "proxy"]
 
 [dependencies.reqwest]
-version = "0.10"
+version = "0.11"
 default-features = false
 features = ["rustls-tls", "gzip", "json"]
