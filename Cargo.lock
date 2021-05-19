@@ -550,9 +550,9 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 
 [[package]]
 name = "is-macro"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04807f3dc9e3ea39af3f8469a5297267faf94859637afb836b33f47d9b2650ee"
+checksum = "a322dd16d960e322c3d92f541b4c1a4f0a2e81e1fdeee430d8cecc8b72e8015f"
 dependencies = [
  "Inflector",
  "pmutil",
