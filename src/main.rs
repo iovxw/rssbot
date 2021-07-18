@@ -75,6 +75,9 @@ pub struct Opt {
     /// Single user mode, only specified user can use this bot
     #[structopt(long, value_name = "user id")]
     single_user: Option<i64>,
+    /// Multi-user mode, only specified users can use this bot, split users with `,'
+    #[structopt(long, value_name = "users id")]
+    admins: Option<String>,
     /// Make bot commands only accessible for group admins.
     #[structopt(long)]
     restricted: bool,

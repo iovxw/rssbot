@@ -52,6 +52,7 @@ FLAGS:
     -V, --version       Prints version information
 
 OPTIONS:
+        --admins <users id>         Multi-user mode, only specified users can use this bot, split users with `,'
     -d, --database <path>           Path to database [default: ./rssbot.json]
         --max-feed-size <bytes>     Maximum feed size, 0 is unlimited [default: 2097152]
         --max-interval <seconds>    Maximum fetch interval [default: 43200]
