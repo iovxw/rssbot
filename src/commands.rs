@@ -21,6 +21,7 @@ pub use sub::sub;
 pub use unsub::unsub;
 
 pub async fn check_command(opt: &crate::Opt, cmd: Arc<Command<Text>>) -> bool {
+    use std::str::FromStr;
     use tbot::contexts::fields::Message;
     use tbot::types::chat::Kind::*;
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
@@ -30,7 +31,9 @@ pub async fn check_command(opt: &crate::Opt, cmd: Arc<Command<Text>>) -> bool {
         .unwrap_or_else(|| cmd.chat.id.0);
 
     // Single user mode
-    if matches!(opt.single_user, Some(owner) if owner != from) {
+    if matches!(opt.single_user, Some(owner) if owner != from)
+        || matches!(&opt.admins, Some(admins) if admins.split(",").into_iter().map(|x| i64::from_str(x.trim()).expect("Not valid number")).all(|admin| admin != from))
+    {
         eprintln!(
             "Unauthenticated request from user/channel: {}, command: {}, args: {}",
             from, cmd.command, cmd.text.value
