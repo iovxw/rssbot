@@ -28,6 +28,7 @@ quick-xml = { version = "0.22", features = ["encoding"] }
 chrono = "0.4"
 pinyin = "0.8"
 either = "1.6"
+atomicwrites = "0.3"
 
 [dependencies.tbot]
 version = "0.6"

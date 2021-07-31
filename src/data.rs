@@ -4,6 +4,7 @@ use std::hash::{BuildHasherDefault, Hash, Hasher};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
+use atomicwrites::{AtomicFile, OverwriteBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use thiserror::Error;
@@ -273,14 +274,15 @@ impl Database {
 
     pub fn save(&self) -> Result<(), DataError> {
         let feeds_list: Vec<&Feed> = self.feeds.iter().map(|(_id, feed)| feed).collect();
-        let mut file = File::create(&self.path)?;
-        if let Err(e) = serde_json::to_writer(&mut file, &feeds_list) {
-            if e.is_io() {
-                return Err(DataError::Io(e.into()));
-            } else {
-                unreachable!(e);
-            };
-        }
+        let file = AtomicFile::new(&self.path, OverwriteBehavior::AllowOverwrite);
+        file.write(|file| serde_json::to_writer(file, &feeds_list))
+            .map_err(|e| match e {
+                atomicwrites::Error::Internal(e) => DataError::Io(e),
+                atomicwrites::Error::User(e) => {
+                    assert!(!e.is_io(), "unreachable code");
+                    DataError::Io(e.into())
+                }
+            })?;
         Ok(())
     }
 }
