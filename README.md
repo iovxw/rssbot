@@ -52,12 +52,12 @@ FLAGS:
     -V, --version       Prints version information
 
 OPTIONS:
-        --admins <users id>         Multi-user mode, only specified users can use this bot, split users with `,'
+        --admin <user id>...        Private mode, only specified user can use this bot. This argument can be passed
+                                    multiple times to allow multiple admins
     -d, --database <path>           Path to database [default: ./rssbot.json]
         --max-feed-size <bytes>     Maximum feed size, 0 is unlimited [default: 2097152]
         --max-interval <seconds>    Maximum fetch interval [default: 43200]
         --min-interval <seconds>    Minimum fetch interval [default: 300]
-        --single-user <user id>     Single user mode, only specified user can use this bot
 
 ARGS:
     <token>    Telegram bot token
