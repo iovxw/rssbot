@@ -32,6 +32,7 @@ atomicwrites = "0.3"
 
 [dependencies.tbot]
 version = "0.6"
+git = "https://gitlab.com/SnejUgal/tbot.git"
 default-features = false
 features = ["rustls", "proxy"]
 
