@@ -9,12 +9,10 @@ use std::process;
 use std::sync::{Arc, Mutex}; // TODO: async Mutex
 
 use anyhow::Context;
+use hyper_proxy::{Intercept, Proxy};
 use once_cell::sync::OnceCell;
 use structopt::StructOpt;
-use tbot::{
-    self,
-    proxy::{Intercept, Proxy},
-};
+use tbot;
 use tokio;
 
 // Include the tr! macro and localizations
@@ -99,21 +97,6 @@ fn check_interval(s: String) -> Result<(), String> {
     })
 }
 
-macro_rules! handle {
-    ($env: expr, $f: expr) => {{
-        let env = $env.clone();
-        let f = $f;
-        move |cmd| {
-            let future = f(env.clone(), cmd);
-            async {
-                if let Err(e) = future.await {
-                    print_error(e);
-                }
-            }
-        }
-    }};
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     enable_fail_fast();
@@ -121,7 +104,9 @@ async fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
     let db = Arc::new(Mutex::new(Database::open(opt.database.clone())?));
     let bot = if let Some(proxy) = init_proxy() {
-        tbot::Bot::with_proxy(opt.token.clone(), proxy)
+        tbot::bot::Builder::with_string_token(opt.token.clone())
+            .proxy(proxy)
+            .build()
     } else {
         tbot::Bot::new(opt.token.clone())
     };
@@ -141,22 +126,10 @@ async fn main() -> anyhow::Result<()> {
     fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);
 
     let opt = Arc::new(opt);
-    let check_command = move |cmd| {
-        let opt = opt.clone();
-        async move { commands::check_command(&opt, cmd).await }
-    };
 
     let mut event_loop = bot.event_loop();
     event_loop.username(me.user.username.unwrap());
-    event_loop.start_if(check_command.clone(), handle!(db, commands::start));
-    event_loop.command_if("rss", check_command.clone(), handle!(db, commands::rss));
-    event_loop.command_if("sub", check_command.clone(), handle!(db, commands::sub));
-    event_loop.command_if("unsub", check_command.clone(), handle!(db, commands::unsub));
-    event_loop.command_if(
-        "export",
-        check_command.clone(),
-        handle!(db, commands::export),
-    );
+    commands::register_commands(&mut event_loop, opt, db);
 
     event_loop.polling().start().await.unwrap();
     Ok(())

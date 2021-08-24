@@ -3,10 +3,7 @@ use std::sync::Mutex;
 
 use either::Either;
 use pinyin::{Pinyin, ToPinyin};
-use tbot::{
-    contexts::{Command, Text},
-    types::parameters,
-};
+use tbot::{contexts::Command, types::parameters};
 
 use crate::data::Database;
 use crate::messages::{format_large_msg, Escape};
@@ -15,7 +12,7 @@ use super::{check_channel_permission, update_response, MsgTarget};
 
 pub async fn rss(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text>>,
+    cmd: Arc<Command>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
@@ -23,8 +20,7 @@ pub async fn rss(
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
 
     if !channel.is_empty() {
-        let user_id = cmd.from.as_ref().unwrap().id;
-        let channel_id = check_channel_permission(&cmd.bot, channel, target, user_id).await?;
+        let channel_id = check_channel_permission(&cmd, channel, target).await?;
         if channel_id.is_none() {
             return Ok(());
         }

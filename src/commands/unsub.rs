@@ -1,10 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use tbot::{
-    contexts::{Command, Text},
-    types::parameters,
-};
+use tbot::{contexts::Command, types::parameters};
 
 use crate::data::Database;
 use crate::messages::Escape;
@@ -13,7 +10,7 @@ use super::{check_channel_permission, update_response, MsgTarget};
 
 pub async fn unsub(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command<Text>>,
+    cmd: Arc<Command>,
 ) -> Result<(), tbot::errors::MethodCall> {
     let chat_id = cmd.chat.id;
     let text = &cmd.text.value;
@@ -25,8 +22,7 @@ pub async fn unsub(
     match &*args {
         [url] => feed_url = url,
         [channel, url] => {
-            let user_id = cmd.from.as_ref().unwrap().id;
-            let channel_id = check_channel_permission(&cmd.bot, channel, target, user_id).await?;
+            let channel_id = check_channel_permission(&cmd, channel, target).await?;
             if channel_id.is_none() {
                 return Ok(());
             }
@@ -35,7 +31,7 @@ pub async fn unsub(
         }
         [..] => {
             let msg = tr!("unsub_how_to_use");
-            update_response(&cmd.bot, target, parameters::Text::with_plain(&msg)).await?;
+            update_response(&cmd.bot, target, parameters::Text::with_plain(msg)).await?;
             return Ok(());
         }
     };

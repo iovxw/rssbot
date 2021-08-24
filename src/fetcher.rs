@@ -143,13 +143,13 @@ async fn push_updates<I: IntoIterator<Item = i64>>(
     bot: &Bot,
     db: &Arc<Mutex<Database>>,
     subscribers: I,
-    msg: parameters::Text<'_>,
+    msg: parameters::Text,
 ) -> Result<(), tbot::errors::MethodCall> {
     use tbot::errors::MethodCall;
     for mut subscriber in subscribers {
         'retry: for _ in 0..3 {
             match bot
-                .send_message(tbot::types::chat::Id(subscriber), msg)
+                .send_message(tbot::types::chat::Id(subscriber), msg.clone())
                 .is_web_page_preview_disabled(true)
                 .call()
                 .await

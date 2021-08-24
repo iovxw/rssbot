@@ -36,6 +36,11 @@ git = "https://gitlab.com/SnejUgal/tbot.git"
 default-features = false
 features = ["rustls", "proxy"]
 
+[dependencies.hyper-proxy]
+version = "0.9"
+default-features = false
+features = ["rustls"]
+
 [dependencies.reqwest]
 version = "0.10"
 default-features = false
