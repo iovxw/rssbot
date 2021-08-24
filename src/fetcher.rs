@@ -9,10 +9,11 @@ use futures::{future::FutureExt, select_biased};
 use tbot::{types::parameters, Bot};
 use tokio::{
     self,
-    stream::StreamExt,
     sync::Notify,
-    time::{self, delay_for, delay_queue::DelayQueue, Duration, Instant},
+    time::{self, Duration, Instant},
 };
+use tokio_stream::StreamExt;
+use tokio_util::time::DelayQueue;
 
 use crate::client::pull_feed;
 use crate::data::{Database, Feed, FeedUpdate};
@@ -173,7 +174,7 @@ async fn push_updates<I: IntoIterator<Item = i64>>(
                     retry_after: Some(delay),
                     ..
                 }) => {
-                    time::delay_for(Duration::from_secs(delay)).await;
+                    time::sleep(Duration::from_secs(delay)).await;
                     continue 'retry;
                 }
                 other => {
@@ -210,12 +211,12 @@ impl FetchQueue {
         if !exists {
             self.notifies.insert(feed.link.clone(), delay);
             self.feeds.insert(feed.link.clone(), feed);
-            self.wakeup.notify();
+            self.wakeup.notify_waiters();
         }
         !exists
     }
 
-    async fn next(&mut self) -> Result<Feed, time::Error> {
+    async fn next(&mut self) -> Result<Feed, time::error::Error> {
         loop {
             if let Some(feed_id) = self.notifies.next().await {
                 let feed = self.feeds.remove(feed_id?.get_ref()).unwrap();
@@ -256,7 +257,7 @@ struct Opportunity {
 
 impl Opportunity {
     async fn wait(&self) {
-        delay_for(Duration::from_secs(self.n as u64)).await
+        time::sleep(Duration::from_secs(self.n as u64)).await
     }
 }
 
