@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use tbot::{contexts::Command, types::parameters, Bot};
+use tokio::sync::Mutex;
 
 use crate::data::Database;
 

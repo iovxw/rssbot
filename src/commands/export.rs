@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use tbot::{
     contexts::Command,
     types::{input_file, parameters},
 };
+use tokio::sync::Mutex;
 
 use crate::data::Database;
 use crate::opml::into_opml;
@@ -28,7 +28,7 @@ pub async fn export(
         target_id = channel_id.unwrap();
     }
 
-    let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
+    let feeds = db.lock().await.subscribed_feeds(target_id.0);
     if feeds.is_none() {
         update_response(
             &cmd.bot,

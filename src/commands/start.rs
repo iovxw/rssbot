@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use tbot::{contexts::Command, types::parameters};
+use tokio::sync::Mutex;
 
 use super::{update_response, Database, MsgTarget};
 

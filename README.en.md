@@ -2,7 +2,7 @@
 
 **Other Languages:** [Chinese](README.md)
 
-Chinese Telegram RSS bot [@RustRssBot](http://t.me/RustRssBot)
+Telegram RSS bot [@RustRssBot](http://t.me/RustRssBot)
 
 **Supports:**
  - [x] RSS 0.9

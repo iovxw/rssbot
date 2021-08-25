@@ -1,8 +1,9 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tbot::Bot;
 use tokio::{
     self,
+    sync::Mutex,
     time::{self, Duration},
 };
 
@@ -22,7 +23,7 @@ pub fn start_pruning(bot: Bot, db: Arc<Mutex<Database>>) {
 }
 
 async fn prune(bot: &Bot, db: &Mutex<Database>) -> Result<(), tbot::errors::MethodCall> {
-    let subscribers = db.lock().unwrap().all_subscribers();
+    let subscribers = db.lock().await.all_subscribers();
     for subscriber in subscribers {
         let chat_id = tbot::types::chat::Id(subscriber);
         let chat = bot.get_chat(chat_id).call().await?;
@@ -35,7 +36,7 @@ async fn prune(bot: &Bot, db: &Mutex<Database>) -> Result<(), tbot::errors::Meth
             // so we don't need to check that.
             // And just ignore `can_post_messages` or `can_send_messages`
             if me.status.is_left() || me.status.is_kicked() {
-                db.lock().unwrap().delete_subscriber(subscriber);
+                db.lock().await.delete_subscriber(subscriber);
             }
         }
     }

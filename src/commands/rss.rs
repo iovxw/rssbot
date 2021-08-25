@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use either::Either;
 use pinyin::{Pinyin, ToPinyin};
 use tbot::{contexts::Command, types::parameters};
+use tokio::sync::Mutex;
 
 use crate::data::Database;
 use crate::messages::{format_large_msg, Escape};
@@ -27,7 +27,7 @@ pub async fn rss(
         target_id = channel_id.unwrap();
     }
 
-    let feeds = db.lock().unwrap().subscribed_feeds(target_id.0);
+    let feeds = db.lock().await.subscribed_feeds(target_id.0);
     let mut msgs = if let Some(mut feeds) = feeds {
         feeds.sort_by_cached_key(|feed| {
             feed.title

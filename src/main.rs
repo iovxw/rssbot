@@ -6,14 +6,14 @@ use std::env;
 use std::panic;
 use std::path::PathBuf;
 use std::process;
-use std::sync::{Arc, Mutex}; // TODO: async Mutex
+use std::sync::Arc;
 
 use anyhow::Context;
 use hyper_proxy::{Intercept, Proxy};
 use once_cell::sync::OnceCell;
 use structopt::StructOpt;
 use tbot;
-use tokio;
+use tokio::{self, sync::Mutex};
 
 // Include the tr! macro and localizations
 include!(concat!(env!("OUT_DIR"), "/ctl10n_macros.rs"));

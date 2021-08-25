@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use tbot::{contexts::Command, types::parameters};
+use tokio::sync::Mutex;
 
 use crate::data::Database;
 use crate::messages::Escape;
@@ -35,7 +35,7 @@ pub async fn unsub(
             return Ok(());
         }
     };
-    let msg = if let Some(feed) = db.lock().unwrap().unsubscribe(target_id.0, feed_url) {
+    let msg = if let Some(feed) = db.lock().await.unsubscribe(target_id.0, feed_url) {
         tr!(
             "unsubscription_succeeded",
             link = Escape(&feed.link),

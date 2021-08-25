@@ -2,7 +2,7 @@
 
 **Other Languages:** [English](README.en.md)
 
-中文 Telegram RSS 机器人 [@RustRssBot](http://t.me/RustRssBot)
+Telegram RSS 机器人 [@RustRssBot](http://t.me/RustRssBot)
 
 **支持:**
  - [x] RSS 0.9
