@@ -8,7 +8,7 @@ edition = "2018"
 default = []
 
 # enable this to set a subscription limit
-hosted-by-iovxw = []
+hosted-by-iovxw = ["reqwest/trust-dns"]
 
 [build-dependencies]
 ctl10n = "0.2.0"
