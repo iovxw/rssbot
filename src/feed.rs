@@ -823,4 +823,30 @@ mod test {
         let output = parse(Cursor::new(input)).unwrap();
         assert_eq!(output.ttl, Some(42));
     }
+
+    // https://github.com/tafia/quick-xml/issues/311
+    #[test]
+    fn cdata_compatibility() {
+        const CHARACTERS: &str = r#""'<>&"#;
+        let input = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/">
+<channel>
+<title><![CDATA[{}]]></title>
+</channel>
+</rss>"#,
+            CHARACTERS
+        );
+        let r = parse(Cursor::new(input)).unwrap();
+        assert_eq!(
+            r,
+            Rss {
+                title: CHARACTERS.into(),
+                link: "".into(),
+                ttl: None,
+                source: None,
+                items: vec![],
+            }
+        );
+    }
 }
