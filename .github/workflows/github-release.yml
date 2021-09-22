@@ -36,7 +36,7 @@ jobs:
       run: |
         find ./locales -name '*.toml' -printf '%P\0' | while IFS=\n read -r -d '' file
         do
-            LOCALE=${file%.toml}
+            export LOCALE=${file%.toml}
             cargo build --release --target=x86_64-unknown-linux-musl
             mv ./target/x86_64-unknown-linux-musl/release/rssbot rssbot-$LOCALE-amd64-linux
         done
