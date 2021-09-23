@@ -39,6 +39,8 @@ jobs:
             export LOCALE=${file%.toml}
             cargo build --release --target=x86_64-unknown-linux-musl
             mv ./target/x86_64-unknown-linux-musl/release/rssbot rssbot-$LOCALE-amd64-linux
+            cargo build --release --target=x86_64-unknown-linux-musl --no-default-features --features=native-tls
+            mv ./target/x86_64-unknown-linux-musl/release/rssbot rssbot-$LOCALE-amd64-linux-openssl
         done
     - name: Create Release
       id: create_release
@@ -58,4 +60,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_files: "rssbot-*-amd64-linux"
+        asset_files: "rssbot-*"
