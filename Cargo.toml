@@ -5,10 +5,22 @@ authors = ["iovxw <iovxw@outlook.com>"]
 edition = "2018"
 
 [features]
-default = []
+default = ["rustls"]
 
 # enable this to set a subscription limit
 hosted-by-iovxw = ["reqwest/trust-dns"]
+native-tls = [
+    "tbot/default",
+    "hyper-proxy/default",
+    "reqwest/default",
+    "reqwest/native-tls-vendored",
+    "reqwest/native-tls-alpn",
+]
+rustls = [
+    "tbot/rustls",
+    "hyper-proxy/rustls",
+    "reqwest/rustls-tls",
+]
 
 [build-dependencies]
 ctl10n = "0.2.0"
@@ -36,14 +48,13 @@ atomicwrites = "0.3"
 version = "0.6"
 git = "https://gitlab.com/SnejUgal/tbot.git"
 default-features = false
-features = ["rustls", "proxy"]
+features = ["proxy"]
 
 [dependencies.hyper-proxy]
 version = "0.9"
 default-features = false
-features = ["rustls"]
 
 [dependencies.reqwest]
 version = "0.11"
 default-features = false
-features = ["rustls-tls", "gzip", "json"]
+features = ["gzip", "json"]
