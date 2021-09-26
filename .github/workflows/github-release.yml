@@ -6,9 +6,10 @@ on:
       - 'v*'
 
 jobs:
-  build-and-deploy:
+  create-release:
     runs-on: ubuntu-latest
-
+    outputs:
+      upload_url: ${{ steps.create-release.outputs.upload_url }}
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -25,25 +26,8 @@ jobs:
         log="${log//$'\n'/'%0A'}"
         log="${log//$'\r'/'%0D'}"
         echo "::set-output name=value::$log"
-    - name: Install Musl
-      run: sudo apt install -y musl-tools
-    - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
-      with:
-        rust-version: nightly
-        targets: x86_64-unknown-linux-musl
-    - name: Build
-      run: |
-        find ./locales -name '*.toml' -printf '%P\0' | while IFS=\n read -r -d '' file
-        do
-            export LOCALE=${file%.toml}
-            cargo build --release --target=x86_64-unknown-linux-musl
-            mv ./target/x86_64-unknown-linux-musl/release/rssbot rssbot-$LOCALE-amd64-linux
-            cargo build --release --target=x86_64-unknown-linux-musl --no-default-features --features=native-tls
-            mv ./target/x86_64-unknown-linux-musl/release/rssbot rssbot-$LOCALE-amd64-linux-openssl
-        done
     - name: Create Release
-      id: create_release
+      id: create-release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,11 +37,48 @@ jobs:
         body: ${{ steps.changelog.outputs.value }}
         draft: false
         prerelease: false
+
+  build-release:
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-musl, aarch64-unknown-linux-musl]
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Install Rust
+      uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: nightly
+        targets: ${{ matrix.target }}
+    - name: Install Musl
+      if: ${{ matrix.target == 'x86_64-unknown-linux-musl' }}
+      run: |
+        sudo apt-get install -y musl-tools
+        cat << 'EOF' | sudo tee /usr/bin/cross
+        #!/bin/sh
+        cargo $@
+        EOF
+        sudo chmod +x /usr/bin/cross
+    - name: Install Cross
+      if: ${{ matrix.target != 'x86_64-unknown-linux-musl' }}
+      run: cargo install cross
+    - name: Build
+      run: |
+        find ./locales -name '*.toml' -printf '%P\0' | while IFS=\n read -r -d '' file
+        do
+            export LOCALE=${file%.toml}
+            cross build --release --target=${{ matrix.target }}
+            mv ./target/${{ matrix.target }}/release/rssbot rssbot-$LOCALE-${{ matrix.target }}
+            cross build --release --target=${{ matrix.target }} --no-default-features --features=native-tls
+            mv ./target/${{ matrix.target }}/release/rssbot rssbot-$LOCALE-${{ matrix.target }}-openssl
+        done
     - name: Upload Release Asset
       id: upload-release-asset
       uses: iovxw/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
         asset_files: "rssbot-*"
