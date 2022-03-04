@@ -296,7 +296,7 @@ fn gen_item_hash(item: &feed::Item) -> u64 {
     item.id.as_ref().map(|id| gen_hash(&id)).unwrap_or_else(|| {
         let title = item.title.as_ref().map(|s| s.as_str()).unwrap_or_default();
         let link = item.link.as_ref().map(|s| s.as_str()).unwrap_or_default();
-        gen_hash(&format!("{}{}", title, link))
+        gen_hash(&format!("{}{}", title, link.split('#').next().unwrap()))
     })
 }
 
