@@ -27,7 +27,7 @@ ctl10n = "0.2.0"
 
 [dependencies]
 lazy_static = "1.4"
-once_cell = "1.8"
+once_cell = "1.11"
 anyhow = "1.0"
 structopt = "0.3"
 futures = "0.3"
