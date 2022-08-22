@@ -41,7 +41,7 @@ regex = "1.4"
 quick-xml = { version = "0.23", features = ["encoding", "escape-html"] }
 chrono = "0.4"
 pinyin = "0.9"
-either = "1.6"
+either = "1.8"
 atomicwrites = "0.3"
 
 [dependencies.tbot]
