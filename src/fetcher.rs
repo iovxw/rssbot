@@ -217,7 +217,7 @@ impl FetchQueue {
     async fn next(&mut self) -> Result<Feed, time::error::Error> {
         loop {
             if let Some(feed_id) = self.notifies.next().await {
-                let feed = self.feeds.remove(feed_id?.get_ref()).unwrap();
+                let feed = self.feeds.remove(feed_id.get_ref()).unwrap();
                 break Ok(feed);
             } else {
                 self.wakeup.notified().await;
