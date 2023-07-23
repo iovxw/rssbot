@@ -40,7 +40,7 @@ serde_json = "1.0"
 regex = "1.9"
 quick-xml = { version = "0.23", features = ["encoding", "escape-html"] }
 chrono = "0.4"
-pinyin = "0.9"
+pinyin = "0.10"
 either = "1.8"
 atomicwrites = "0.3"
 
