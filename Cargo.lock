@@ -1696,7 +1696,7 @@ dependencies = [
 [[package]]
 name = "tbot"
 version = "0.6.7"
-source = "git+https://gitlab.com/SnejUgal/tbot.git#3b1fbfef72a4638afff0636a1d887001f47e23dd"
+source = "git+https://gitlab.com/SnejUgal/tbot.git#1c3692ea007df7fa94183b422c2741ad731df5e0"
 dependencies = [
  "futures",
  "hyper",
