@@ -1,7 +1,6 @@
-#![feature(error_generic_member_access, provide_any)]
+#![feature(error_reporter)]
 #![recursion_limit = "256"]
 
-use std::backtrace::Backtrace;
 use std::convert::TryInto;
 use std::env;
 use std::panic;
@@ -159,29 +158,10 @@ fn init_proxy() -> Option<Proxy> {
 }
 
 fn print_error<E: std::error::Error>(err: E) {
-    eprintln!("Error: {}", err);
-
-    let mut err: &dyn std::error::Error = &err;
-    let mut deepest_backtrace = err.request_ref::<Backtrace>();
-    if let Some(e) = err.source() {
-        eprintln!("\nCaused by:");
-        let multiple = e.source().is_some();
-        let mut line_counter = 0..;
-        while let (Some(e), Some(line)) = (err.source(), line_counter.next()) {
-            if multiple {
-                eprint!("{: >4}: ", line)
-            } else {
-                eprint!("    ")
-            };
-            eprintln!("{}", e);
-            if let Some(backtrace) = e.request_ref::<Backtrace>() {
-                deepest_backtrace = Some(backtrace);
-            }
-            err = e;
-        }
-    }
-
-    if let Some(backtrace) = deepest_backtrace {
-        eprintln!("\nBacktrace:\n{}", backtrace);
-    }
+    eprintln!(
+        "Error: {}",
+        std::error::Report::new(err)
+            .pretty(true)
+            .show_backtrace(true)
+    );
 }
