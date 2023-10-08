@@ -13,6 +13,7 @@ use hyper_proxy::{Intercept, Proxy};
 use once_cell::sync::OnceCell;
 use structopt::StructOpt;
 use tbot;
+use tbot::bot::Uri;
 use tokio::{self, sync::Mutex};
 
 // Include the tr! macro and localizations
@@ -82,6 +83,13 @@ pub struct Opt {
     /// Make bot commands only accessible for group admins.
     #[structopt(long)]
     restricted: bool,
+    /// Custom telegram api URI
+    #[structopt(
+        long,
+        value_name = "tgapi-uri",
+        default_value = "https://api.telegram.org/"
+    )]
+    api_uri: Uri,
     /// DANGER: Insecure mode, accept invalid TLS certificates
     #[structopt(long)]
     insecure: bool,
@@ -103,12 +111,12 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Opt::from_args();
     let db = Arc::new(Mutex::new(Database::open(opt.database.clone())?));
+    let bot_builder = tbot::bot::Builder::with_string_token(opt.token.clone())
+        .server_uri(opt.api_uri.clone());
     let bot = if let Some(proxy) = init_proxy() {
-        tbot::bot::Builder::with_string_token(opt.token.clone())
-            .proxy(proxy)
-            .build()
+        bot_builder.proxy(proxy).build()
     } else {
-        tbot::Bot::new(opt.token.clone())
+        bot_builder.build()
     };
     let me = bot
         .get_me()
