@@ -1579,7 +1579,7 @@ dependencies = [
  "serde_json",
  "structopt",
  "tbot",
- "thiserror 1.0.69",
+ "thiserror 2.0.8",
  "tokio",
  "tokio-stream",
  "tokio-util",
