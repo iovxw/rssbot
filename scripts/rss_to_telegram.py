@@ -15,9 +15,11 @@ from dataclasses import dataclass
 from html import escape
 from typing import Iterable, List, Optional, Tuple
 
-DEFAULT_FEED_URL = (
-    "https://rssviewer.app/https%3A%2F%2Frss.app%2Ffeeds%2F_UOnMilxnlEVPTVJz.xml?utm=rssapp"
-)
+FEED_URLS = [
+    "https://rssviewer.app/https%3A%2F%2Frss.app%2Ffeeds%2F_UOnMilxnlEVPTVJz.xml?utm=rssapp",
+    "https://rssviewer.app/https%3A%2F%2Frss.app%2Ffeeds%2F_VTIbQ51wkTmYRFJs.xml?utm=rssapp",
+    "https://rssviewer.app/https%3A%2F%2Frss.app%2Ffeeds%2F_BPwb1trASrAKKeAE.xml?utm=rssapp"
+]
 DEFAULT_TOKEN = "8575522536:AAHD7t5kFs4lB26ZCt654Y1GT-JNSHQj1Oo"
 DEFAULT_CHANNEL = "@Musk_Grid"
 DEFAULT_STATE_PATH = "rss_state.json"
