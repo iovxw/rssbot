@@ -114,9 +114,17 @@ def save_state(path: str, items: Iterable[str]) -> None:
 
 def build_message(item: FeedItem) -> str:
     title = escape(item.title)
-    if item.link:
-        return f"<b>{title}</b>\n{escape(item.link)}"
-    return f"<b>{title}</b>"
+    title = escape(item.title or "Untitled")
+link = escape(item.link or "")
+author = escape(item.get('author', '🔭 Source'))
+summary = escape(item.get('summary', '')[:500])  # shorten long text
+
+formatted_message = f"""✅ <b>{title}</b>
+<a href="{link}">🔗 Read Full Article</a>
+
+<b>📝 {author}</b>
+{summary}
+"""
 
 
 def send_message(token: str, chat_id: str, text: str) -> None:
