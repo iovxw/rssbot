@@ -39,6 +39,10 @@ static BOT_ID: OnceLock<tbot::types::user::Id> = OnceLock::new();
 )]
 pub struct Opt {
     /// Telegram bot token
+    #[structopt(
+        env = "RSSBOT_TOKEN",
+        hide_env_values = true
+    )]
     token: String,
     /// Path to database
     #[structopt(
