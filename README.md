@@ -61,7 +61,7 @@ OPTIONS:
         --min-interval <seconds>    Minimum fetch interval [default: 300]
 
 ARGS:
-    <token>    Telegram bot token
+    <token>    Telegram bot token [env: RSSBOT_TOKEN]
 
 NOTE: You can get <user id> using bots like @userinfobot @getidsbot
 ```
@@ -70,6 +70,7 @@ NOTE: You can get <user id> using bots like @userinfobot @getidsbot
 
 ## 环境变量
 
+- `RSSBOT_TOKEN`: Telegram bot token
 - `HTTP_PROXY`: 用于 HTTP 的代理
 - `HTTPS_PROXY`: 用于 HTTPS 的代理
 - `RSSBOT_DONT_PROXY_FEEDS`: 设为 `1` 使所有订阅的 RSS 不通过代理（仅代理 Telegram）

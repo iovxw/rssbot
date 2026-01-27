@@ -63,7 +63,7 @@ OPTIONS:
         --min-interval <seconds>    Minimum fetch interval [default: 300]
 
 ARGS:
-    <token>    Telegram bot token
+    <token>    Telegram bot token [env: RSSBOT_TOKEN]
 
 NOTE: You can get <user id> using bots like @userinfobot @getidsbot
 ```
@@ -72,6 +72,7 @@ Please read the [official docs](https://core.telegram.org/bots#3-how-do-i-create
 
 ## Environment variables
 
+- `RSSBOT_TOKEN`: Telegram bot token
 - `HTTP_PROXY`: Proxy for HTTP
 - `HTTPS_PROXY`: Proxy for HTTPS
 - `RSSBOT_DONT_PROXY_FEEDS`: Set to `1` to limit the proxy to Telegram requests
