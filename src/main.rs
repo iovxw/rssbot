@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context};
 use reqwest::Url;
 use std::sync::OnceLock;
 use structopt::StructOpt;
-use teloxide::prelude::*;
+use teloxide::{prelude::*, types::UserId};
 use tokio::{self, sync::Mutex};
 
 // Include the tr! macro and localizations
@@ -30,7 +30,7 @@ mod opml;
 use crate::data::Database;
 
 static BOT_NAME: OnceLock<String> = OnceLock::new();
-static BOT_ID: OnceLock<i64> = OnceLock::new();
+static BOT_ID: OnceLock<UserId> = OnceLock::new();
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -139,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     BOT_NAME.set(bot_name).unwrap();
-    BOT_ID.set(me.user.id.0.try_into().unwrap()).unwrap();
+    BOT_ID.set(me.user.id).unwrap();
 
     gardener::start_pruning(bot.clone(), db.clone());
     fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);

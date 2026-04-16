@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use teloxide::{prelude::*, types::UserId, RequestError};
+use teloxide::{prelude::*, RequestError};
 use tokio::{
     self,
     sync::Mutex,
@@ -29,7 +29,7 @@ async fn prune(bot: &Bot, db: &Mutex<Database>) -> Result<(), RequestError> {
         let chat = bot.get_chat(chat_id).await?;
         if chat.is_group() || chat.is_supergroup() || chat.is_channel() {
             let me = bot
-                .get_chat_member(chat_id, UserId(*BOT_ID.get().unwrap() as u64))
+                .get_chat_member(chat_id, BOT_ID.get().cloned().unwrap())
                 .await?;
             // Bots can only be added as administrators in channel,
             // so we don't need to check that.

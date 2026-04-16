@@ -370,7 +370,7 @@ pub(super) async fn check_channel_permission(
     }
     let bot_is_admin = admins
         .iter()
-        .any(|member| member.user.id.0 as i64 == *crate::BOT_ID.get().unwrap());
+        .any(|member| member.user.id == crate::BOT_ID.get().cloned().unwrap());
     if !bot_is_admin {
         update_response(
             bot,
