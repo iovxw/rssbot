@@ -219,6 +219,7 @@ impl Database {
                     feed.subscribers.insert(to);
                 }
                 self.subscribers.insert(to, feeds);
+                self.save().unwrap_or_default();
             })
             .is_some()
     }
@@ -283,6 +284,7 @@ impl Database {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum FeedUpdate {
     Items(Vec<feed::Item>),
     Title(String),
@@ -333,6 +335,47 @@ impl Hasher for Size64Hasher {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::UNIX_EPOCH;
+
+    const FEED_URL: &str = "https://example.com/feed.xml";
+
+    fn temp_db_path() -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "rssbot-data-test-{}-{}.json",
+            std::process::id(),
+            unique
+        ))
+    }
+
+    fn make_item(id: &str, title: &str, link: &str) -> feed::Item {
+        feed::Item {
+            title: Some(title.to_owned()),
+            link: Some(link.to_owned()),
+            id: Some(id.to_owned()),
+        }
+    }
+
+    fn make_rss(title: &str, ttl: Option<u32>, items: Vec<feed::Item>) -> feed::Rss {
+        feed::Rss {
+            title: title.to_owned(),
+            link: "https://example.com/home".to_owned(),
+            source: Some(FEED_URL.to_owned()),
+            ttl,
+            items,
+        }
+    }
+
+    fn remove_file_if_exists(path: &PathBuf) {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => panic!("failed to remove {}: {}", path.display(), err),
+        }
+    }
 
     #[test]
     fn size64hasher() {
@@ -354,5 +397,135 @@ mod test {
     fn size64hasher_other_types() {
         let mut h = Size64Hasher::default();
         h.write_u8(0);
+    }
+
+    #[test]
+    fn persists_subscription_lifecycle() {
+        let path = temp_db_path();
+        remove_file_if_exists(&path);
+
+        let mut db = Database::open(path.clone()).unwrap();
+        let rss = make_rss("Feed", Some(30), vec![make_item("item-1", "Item 1", "https://example.com/1")]);
+
+        assert!(db.subscribe(1, FEED_URL, &rss));
+        assert!(!db.subscribe(1, FEED_URL, &rss));
+        assert!(db.is_subscribed(1, FEED_URL));
+        assert_eq!(db.subscribed_feeds(1).unwrap().len(), 1);
+
+        let reopened = Database::open(path.clone()).unwrap();
+        assert!(reopened.is_subscribed(1, FEED_URL));
+        assert_eq!(reopened.all_subscribers(), vec![1]);
+        assert_eq!(reopened.all_feeds().len(), 1);
+
+        assert!(db.unsubscribe(1, FEED_URL).is_some());
+        assert!(db.unsubscribe(1, FEED_URL).is_none());
+        assert!(db.subscribed_feeds(1).is_none());
+        assert!(db.all_feeds().is_empty());
+
+        remove_file_if_exists(&path);
+    }
+
+    #[test]
+    fn migrated_subscriber_is_saved_to_disk() {
+        let path = temp_db_path();
+        remove_file_if_exists(&path);
+
+        let mut db = Database::open(path.clone()).unwrap();
+        let rss = make_rss("Feed", Some(30), vec![make_item("item-1", "Item 1", "https://example.com/1")]);
+
+        assert!(db.subscribe(1, FEED_URL, &rss));
+        assert!(db.update_subscriber(1, 2));
+        assert!(!db.is_subscribed(1, FEED_URL));
+        assert!(db.is_subscribed(2, FEED_URL));
+
+        let reopened = Database::open(path.clone()).unwrap();
+        assert!(!reopened.is_subscribed(1, FEED_URL));
+        assert!(reopened.is_subscribed(2, FEED_URL));
+
+        remove_file_if_exists(&path);
+    }
+
+    #[test]
+    fn update_returns_new_items_and_title_changes() {
+        let path = temp_db_path();
+        remove_file_if_exists(&path);
+
+        let mut db = Database::open(path.clone()).unwrap();
+        let initial = make_rss(
+            "Old title",
+            Some(30),
+            vec![make_item("item-1", "Old item", "https://example.com/1")],
+        );
+        assert!(db.subscribe(1, FEED_URL, &initial));
+
+        let updates = db.update(
+            FEED_URL,
+            make_rss(
+                "New title",
+                Some(60),
+                vec![
+                    make_item("item-2", "New item", "https://example.com/2"),
+                    make_item("item-1", "Old item", "https://example.com/1"),
+                ],
+            ),
+        );
+
+        assert_eq!(
+            updates,
+            vec![
+                FeedUpdate::Items(vec![make_item("item-2", "New item", "https://example.com/2")]),
+                FeedUpdate::Title("New title".to_owned()),
+            ]
+        );
+
+        let stored_feed = db.subscribed_feeds(1).unwrap().pop().unwrap();
+        assert_eq!(stored_feed.title, "New title");
+        assert_eq!(stored_feed.ttl, Some(60));
+
+        remove_file_if_exists(&path);
+    }
+
+    #[test]
+    fn tracks_and_resets_downtime_for_known_feeds() {
+        let path = temp_db_path();
+        remove_file_if_exists(&path);
+
+        let mut db = Database::open(path.clone()).unwrap();
+        let rss = make_rss("Feed", Some(30), vec![make_item("item-1", "Item 1", "https://example.com/1")]);
+        assert!(db.subscribe(1, FEED_URL, &rss));
+
+        assert_eq!(db.get_or_update_down_time(FEED_URL), Some(Duration::default()));
+        assert!(db.get_or_update_down_time(FEED_URL).is_some());
+        assert!(db.reset_down_time(FEED_URL));
+        assert!(db.feeds[&gen_hash(&FEED_URL)].down_time.is_none());
+        assert!(!db.reset_down_time("https://example.com/missing.xml"));
+
+        remove_file_if_exists(&path);
+    }
+
+    #[test]
+    fn item_hash_prefers_id_and_falls_back_to_title_and_link() {
+        let with_id_a = make_item("same-id", "A", "https://example.com/a");
+        let with_id_b = make_item("same-id", "B", "https://example.com/b");
+        assert_eq!(gen_item_hash(&with_id_a), gen_item_hash(&with_id_b));
+
+        let without_id_a = feed::Item {
+            id: None,
+            title: Some("Title".to_owned()),
+            link: Some("https://example.com/a".to_owned()),
+        };
+        let without_id_b = feed::Item {
+            id: None,
+            title: Some("Title".to_owned()),
+            link: Some("https://example.com/a".to_owned()),
+        };
+        let without_id_c = feed::Item {
+            id: None,
+            title: Some("Other".to_owned()),
+            link: Some("https://example.com/c".to_owned()),
+        };
+
+        assert_eq!(gen_item_hash(&without_id_a), gen_item_hash(&without_id_b));
+        assert_ne!(gen_item_hash(&without_id_a), gen_item_hash(&without_id_c));
     }
 }

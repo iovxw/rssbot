@@ -52,3 +52,31 @@ impl<'a> fmt::Display for Escape<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keeps_lines_in_one_message_when_they_fit() {
+        let msgs = format_large_msg("head".to_owned(), &["one", "two"], |line| line.to_string());
+
+        assert_eq!(msgs, vec!["head\none\ntwo"]);
+    }
+
+    #[test]
+    fn starts_a_new_message_when_appending_would_exceed_limit() {
+        let head = "x".repeat(TELEGRAM_MAX_MSG_LEN);
+        let msgs = format_large_msg(head.clone(), &["y"], |line| line.to_string());
+
+        assert_eq!(msgs, vec![head, "y".to_owned()]);
+    }
+
+    #[test]
+    fn escapes_html_sensitive_characters() {
+        assert_eq!(
+            Escape("<tag attr=\"a&b\">").to_string(),
+            "&lt;tag attr=&quot;a&amp;b&quot;&gt;"
+        );
+    }
+}

@@ -237,7 +237,20 @@ impl Drop for Opportunity {
 
 #[cfg(test)]
 mod tests {
-    use super::chat_is_unavailable;
+    use super::*;
+    use serde_json::json;
+
+    fn test_feed(link: &str, title: &str) -> Feed {
+        serde_json::from_value(json!({
+            "link": link,
+            "title": title,
+            "down_time": null,
+            "subscribers": Vec::<i64>::new(),
+            "ttl": 60,
+            "hash_list": Vec::<u64>::new(),
+        }))
+        .unwrap()
+    }
 
     #[test]
     fn classifies_unavailable_chat_errors() {
@@ -252,5 +265,44 @@ mod tests {
         assert!(!chat_is_unavailable("Too Many Requests: retry after 3"));
         assert!(!chat_is_unavailable("Bad Request: message is too long"));
         assert!(!chat_is_unavailable("Internal Server Error: try again later"));
+    }
+
+    #[tokio::test]
+    async fn fetch_queue_deduplicates_by_feed_link() {
+        let mut queue = FetchQueue::new();
+
+        assert!(queue.enqueue(
+            test_feed("https://example.com/feed.xml", "First title"),
+            Duration::from_millis(0),
+        ));
+        assert!(!queue.enqueue(
+            test_feed("https://example.com/feed.xml", "Replacement title"),
+            Duration::from_millis(0),
+        ));
+
+        let next = time::timeout(Duration::from_secs(1), queue.next())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(next.title, "First title");
+        assert!(queue.feeds.is_empty());
+    }
+
+    #[test]
+    fn throttle_cycles_slots_and_releases_counter_on_drop() {
+        let throttle = Throttle::new(2);
+
+        {
+            let first = throttle.acquire();
+            let second = throttle.acquire();
+            let third = throttle.acquire();
+
+            assert_eq!(first.n, 0);
+            assert_eq!(second.n, 1);
+            assert_eq!(third.n, 0);
+            assert_eq!(throttle.counter.load(Ordering::SeqCst), 3);
+        }
+
+        assert_eq!(throttle.counter.load(Ordering::SeqCst), 0);
     }
 }

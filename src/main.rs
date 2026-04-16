@@ -222,4 +222,19 @@ mod tests {
         assert_eq!(parse_human_size("2mb").unwrap(), 2_097_152);
         assert_eq!(parse_human_size("2097152").unwrap(), 2_097_152);
     }
+
+    #[test]
+    fn test_parse_human_size_rejects_invalid_input() {
+        assert_eq!(parse_human_size("2TB").unwrap(), 2 * 1024_u64.pow(4));
+        assert!(parse_human_size("2P").is_err());
+        assert!(parse_human_size("").is_err());
+    }
+
+    #[test]
+    fn test_check_interval() {
+        assert!(check_interval("1".to_owned()).is_ok());
+        assert!(check_interval("600".to_owned()).is_ok());
+        assert!(check_interval("0".to_owned()).is_err());
+        assert!(check_interval("not-a-number".to_owned()).is_err());
+    }
 }
