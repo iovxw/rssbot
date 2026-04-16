@@ -129,19 +129,6 @@ pub(super) enum MessageFrom {
     Chat(Chat),
 }
 
-impl MessageFrom {
-    fn is_chat(&self) -> bool {
-        matches!(self, Self::Chat(_))
-    }
-
-    fn expect_user(self) -> User {
-        match self {
-            Self::User(user) => user,
-            Self::Chat(_) => panic!("UNREACHABLE: expected user sender"),
-        }
-    }
-}
-
 pub(super) enum ReplyText {
     Plain(String),
     Html(String),
@@ -332,13 +319,13 @@ pub(super) async fn check_channel_permission(
         .from
         .as_ref()
         .expect("UNREACHABLE: message from channel");
-
-    if from.is_chat() {
-        // FIXME: error message
-        return Ok(None);
-    }
-
-    let user_id = from.clone().expect_user().id;
+    let user_id = match from.clone() {
+        MessageFrom::User(user) => user.id,
+        MessageFrom::Chat(_) => {
+            // FIXME: error message
+            return Ok(None);
+        }
+    };
 
     let channel_id = channel
         .parse::<i64>()
