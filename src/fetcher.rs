@@ -6,7 +6,12 @@ use std::sync::{
 };
 
 use futures::{future::FutureExt, select_biased};
-use tbot::{types::parameters, Bot};
+use teloxide::{
+    prelude::*,
+    sugar::request::RequestLinkPreviewExt as _,
+    types::ParseMode,
+    RequestError,
+};
 use tokio::{
     self,
     sync::{Mutex, Notify},
@@ -62,7 +67,7 @@ async fn fetch_and_push_updates(
     bot: Bot,
     db: Arc<Mutex<Database>>,
     feed: Feed,
-) -> Result<(), tbot::errors::MethodCall> {
+) -> Result<(), RequestError> {
     let new_feed = match pull_feed(&feed.link).await {
         Ok(feed) => feed,
         Err(e) => {
@@ -80,13 +85,7 @@ async fn fetch_and_push_updates(
                     title = Escape(&feed.title),
                     error = Escape(&e.to_user_friendly())
                 );
-                push_updates(
-                    &bot,
-                    &db,
-                    feed.subscribers,
-                    parameters::Text::with_html(&msg),
-                )
-                .await?;
+                push_updates(&bot, &db, feed.subscribers, msg).await?;
             }
             return Ok(());
         }
@@ -103,13 +102,7 @@ async fn fetch_and_push_updates(
                         format!("<a href=\"{}\">{}</a>", Escape(link), Escape(title))
                     });
                 for msg in msgs {
-                    push_updates(
-                        &bot,
-                        &db,
-                        feed.subscribers.iter().copied(),
-                        parameters::Text::with_html(&msg),
-                    )
-                    .await?;
+                    push_updates(&bot, &db, feed.subscribers.iter().copied(), msg).await?;
                 }
             }
             FeedUpdate::Title(new_title) => {
@@ -119,13 +112,7 @@ async fn fetch_and_push_updates(
                     title = Escape(&feed.title),
                     new_title = Escape(&new_title)
                 );
-                push_updates(
-                    &bot,
-                    &db,
-                    feed.subscribers.iter().copied(),
-                    parameters::Text::with_html(&msg),
-                )
-                .await?;
+                push_updates(&bot, &db, feed.subscribers.iter().copied(), msg).await?;
             }
         }
     }
@@ -136,35 +123,26 @@ async fn push_updates<I: IntoIterator<Item = i64>>(
     bot: &Bot,
     db: &Arc<Mutex<Database>>,
     subscribers: I,
-    msg: parameters::Text,
-) -> Result<(), tbot::errors::MethodCall> {
-    use tbot::errors::MethodCall;
+    msg: String,
+) -> Result<(), RequestError> {
     for mut subscriber in subscribers {
         'retry: for _ in 0..3 {
             match bot
-                .send_message(tbot::types::chat::Id(subscriber), msg.clone())
-                .is_web_page_preview_disabled(true)
-                .call()
+                .send_message(ChatId(subscriber), msg.clone())
+                .parse_mode(ParseMode::Html)
+                .disable_link_preview(true)
                 .await
             {
-                Err(MethodCall::RequestError { description, .. })
-                    if chat_is_unavailable(&description) =>
-                {
+                Err(RequestError::Api(api)) if chat_is_unavailable(&api.to_string()) => {
                     db.lock().await.delete_subscriber(subscriber);
                 }
-                Err(MethodCall::RequestError {
-                    migrate_to_chat_id: Some(new_chat_id),
-                    ..
-                }) => {
+                Err(RequestError::MigrateToChatId(new_chat_id)) => {
                     db.lock().await.update_subscriber(subscriber, new_chat_id.0);
                     subscriber = new_chat_id.0;
                     continue 'retry;
                 }
-                Err(MethodCall::RequestError {
-                    retry_after: Some(delay),
-                    ..
-                }) => {
-                    time::sleep(Duration::from_secs(delay)).await;
+                Err(RequestError::RetryAfter(delay)) => {
+                    time::sleep(delay.duration()).await;
                     continue 'retry;
                 }
                 other => {
@@ -254,5 +232,25 @@ impl Opportunity {
 impl Drop for Opportunity {
     fn drop(&mut self) {
         self.counter.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chat_is_unavailable;
+
+    #[test]
+    fn classifies_unavailable_chat_errors() {
+        assert!(chat_is_unavailable("Forbidden: bot was blocked by the user"));
+        assert!(chat_is_unavailable("Bad Request: chat not found"));
+        assert!(chat_is_unavailable("Forbidden: bot have no rights to send a message"));
+        assert!(chat_is_unavailable("Bad Request: need administrator rights in the channel chat"));
+    }
+
+    #[test]
+    fn keeps_other_request_errors_retryable() {
+        assert!(!chat_is_unavailable("Too Many Requests: retry after 3"));
+        assert!(!chat_is_unavailable("Bad Request: message is too long"));
+        assert!(!chat_is_unavailable("Internal Server Error: try again later"));
     }
 }

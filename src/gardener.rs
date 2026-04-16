@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tbot::Bot;
+use teloxide::{prelude::*, types::UserId, RequestError};
 use tokio::{
     self,
     sync::Mutex,
@@ -22,20 +22,19 @@ pub fn start_pruning(bot: Bot, db: Arc<Mutex<Database>>) {
     });
 }
 
-async fn prune(bot: &Bot, db: &Mutex<Database>) -> Result<(), tbot::errors::MethodCall> {
+async fn prune(bot: &Bot, db: &Mutex<Database>) -> Result<(), RequestError> {
     let subscribers = db.lock().await.all_subscribers();
     for subscriber in subscribers {
-        let chat_id = tbot::types::chat::Id(subscriber);
-        let chat = bot.get_chat(chat_id).call().await?;
-        if chat.kind.is_group() || chat.kind.is_supergroup() || chat.kind.is_channel() {
+        let chat_id = ChatId(subscriber);
+        let chat = bot.get_chat(chat_id).await?;
+        if chat.is_group() || chat.is_supergroup() || chat.is_channel() {
             let me = bot
-                .get_chat_member(chat_id, *BOT_ID.get().unwrap())
-                .call()
+                .get_chat_member(chat_id, UserId(*BOT_ID.get().unwrap() as u64))
                 .await?;
             // Bots can only be added as administrators in channel,
             // so we don't need to check that.
             // And just ignore `can_post_messages` or `can_send_messages`
-            if me.status.is_left() || me.status.is_kicked() {
+            if me.kind.is_left() || me.kind.is_banned() {
                 db.lock().await.delete_subscriber(subscriber);
             }
         }

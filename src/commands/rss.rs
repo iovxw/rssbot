@@ -2,18 +2,20 @@ use std::sync::Arc;
 
 use either::Either;
 use pinyin::{Pinyin, ToPinyin};
-use tbot::{contexts::Command, types::parameters};
 use tokio::sync::Mutex;
 
 use crate::data::Database;
 use crate::messages::{format_large_msg, Escape};
 
-use super::{check_channel_permission, update_response, MsgTarget};
+use super::{
+    check_channel_permission, send_reply, update_response, Command, HandlerResult, MsgTarget,
+    ReplyText,
+};
 
 pub async fn rss(
     db: Arc<Mutex<Database>>,
     cmd: Arc<Command>,
-) -> Result<(), tbot::errors::MethodCall> {
+) -> HandlerResult {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
@@ -52,18 +54,11 @@ pub async fn rss(
     };
 
     let first_msg = msgs.remove(0);
-    update_response(&cmd.bot, target, parameters::Text::with_html(&first_msg)).await?;
+    update_response(&cmd.bot, target, ReplyText::html(first_msg)).await?;
 
     let mut prev_msg = target.message_id;
     for msg in msgs {
-        let text = parameters::Text::with_html(&msg);
-        let msg = cmd
-            .bot
-            .send_message(chat_id, text)
-            .in_reply_to(prev_msg)
-            .is_web_page_preview_disabled(true)
-            .call()
-            .await?;
+        let msg = send_reply(&cmd.bot, chat_id, prev_msg, ReplyText::html(msg)).await?;
         prev_msg = msg.id;
     }
     Ok(())

@@ -1,7 +1,6 @@
 #![feature(error_reporter)]
 #![recursion_limit = "256"]
 
-use std::convert::TryInto;
 use std::env;
 use std::panic;
 use std::path::PathBuf;
@@ -9,16 +8,17 @@ use std::process;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context};
-use hyper_proxy::{Intercept, Proxy};
+use reqwest::Url;
 use std::sync::OnceLock;
 use structopt::StructOpt;
-use tbot::bot::Uri;
+use teloxide::prelude::*;
 use tokio::{self, sync::Mutex};
 
 // Include the tr! macro and localizations
 include!(concat!(env!("OUT_DIR"), "/ctl10n_macros.rs"));
 
 mod client;
+mod command_text;
 mod commands;
 mod data;
 mod feed;
@@ -30,7 +30,7 @@ mod opml;
 use crate::data::Database;
 
 static BOT_NAME: OnceLock<String> = OnceLock::new();
-static BOT_ID: OnceLock<tbot::types::user::Id> = OnceLock::new();
+static BOT_ID: OnceLock<i64> = OnceLock::new();
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -87,7 +87,7 @@ pub struct Opt {
         value_name = "tgapi-uri",
         default_value = "https://api.telegram.org/"
     )]
-    api_uri: Uri,
+    api_uri: Url,
     /// DANGER: Insecure mode, accept invalid TLS certificates
     #[structopt(long)]
     insecure: bool,
@@ -125,16 +125,9 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Opt::from_args();
     let db = Arc::new(Mutex::new(Database::open(opt.database.clone())?));
-    let bot_builder =
-        tbot::bot::Builder::with_string_token(opt.token.clone()).server_uri(opt.api_uri.clone());
-    let bot = if let Some(proxy) = init_proxy() {
-        bot_builder.proxy(proxy).build()
-    } else {
-        bot_builder.build()
-    };
+    let bot = build_bot(&opt)?;
     let me = bot
         .get_me()
-        .call()
         .await
         .context("Initialization failed, check your network and Telegram token")?;
 
@@ -146,18 +139,34 @@ async fn main() -> anyhow::Result<()> {
     );
 
     BOT_NAME.set(bot_name).unwrap();
-    BOT_ID.set(me.user.id).unwrap();
+    BOT_ID.set(me.user.id.0.try_into().unwrap()).unwrap();
 
     gardener::start_pruning(bot.clone(), db.clone());
     fetcher::start(bot.clone(), db.clone(), opt.min_interval, opt.max_interval);
 
     let opt = Arc::new(opt);
 
-    let mut event_loop = bot.event_loop();
-    event_loop.username(me.user.username.unwrap());
-    commands::register_commands(&mut event_loop, opt, db);
+    let handler = dptree::entry()
+        .branch(Update::filter_message().endpoint(
+            |bot: Bot, msg: Message, opt: Arc<crate::Opt>, db: Arc<Mutex<Database>>| async move {
+                commands::handle_message(bot, msg, opt, db).await;
+                respond(())
+            },
+        ))
+        .branch(Update::filter_channel_post().endpoint(
+            |bot: Bot, msg: Message, opt: Arc<crate::Opt>, db: Arc<Mutex<Database>>| async move {
+                commands::handle_message(bot, msg, opt, db).await;
+                respond(())
+            },
+        ));
 
-    event_loop.polling().start().await.unwrap();
+    Dispatcher::builder(bot, handler)
+        .dependencies(dptree::deps![opt, db])
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
+
     Ok(())
 }
 
@@ -170,17 +179,27 @@ fn enable_fail_fast() {
     }));
 }
 
-fn init_proxy() -> Option<Proxy> {
+fn init_proxy() -> Option<String> {
     // Telegram Bot API only uses https, no need to check http_proxy
     env::var("HTTPS_PROXY")
         .or_else(|_| env::var("https_proxy"))
-        .map(|uri| {
-            let uri = uri
-                .try_into()
-                .unwrap_or_else(|e| panic!("Illegal HTTPS_PROXY: {}", e));
-            Proxy::new(Intercept::All, uri)
-        })
         .ok()
+}
+
+fn build_bot(opt: &Opt) -> anyhow::Result<Bot> {
+    let mut client_builder = teloxide::net::default_reqwest_settings();
+
+    if let Some(proxy) = init_proxy() {
+        client_builder = client_builder.proxy(
+            reqwest::Proxy::all(&proxy).context("Illegal HTTPS_PROXY")?,
+        );
+    }
+
+    let client = client_builder
+        .build()
+        .context("Failed to build Telegram API client")?;
+
+    Ok(Bot::with_client(opt.token.clone(), client).set_api_url(opt.api_uri.clone()))
 }
 
 fn print_error<E: std::error::Error>(err: E) {

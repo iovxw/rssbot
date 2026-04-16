@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
-use tbot::{
-    contexts::Command,
-    types::{input_file, parameters},
-};
+use teloxide::{prelude::Requester as _, sugar::request::RequestReplyExt as _, types::InputFile};
 use tokio::sync::Mutex;
 
 use crate::data::Database;
 use crate::opml::into_opml;
 
-use super::{check_channel_permission, update_response, MsgTarget};
+use super::{
+    check_channel_permission, update_response, Command, HandlerResult, MsgTarget, ReplyText,
+};
 
 pub async fn export(
     db: Arc<Mutex<Database>>,
     cmd: Arc<Command>,
-) -> Result<(), tbot::errors::MethodCall> {
+) -> HandlerResult {
     let chat_id = cmd.chat.id;
     let channel = &cmd.text.value;
     let mut target_id = chat_id;
@@ -33,7 +32,7 @@ pub async fn export(
         update_response(
             &cmd.bot,
             target,
-            parameters::Text::with_plain(tr!("subscription_list_empty")),
+            ReplyText::plain(tr!("subscription_list_empty")),
         )
         .await?;
         return Ok(());
@@ -43,10 +42,9 @@ pub async fn export(
     cmd.bot
         .send_document(
             chat_id,
-            input_file::Document::with_bytes("feeds.opml", opml.as_bytes()),
+            InputFile::memory(opml.into_bytes()).file_name("feeds.opml"),
         )
-        .in_reply_to(cmd.message_id)
-        .call()
+        .reply_to(cmd.message_id)
         .await?;
     Ok(())
 }
