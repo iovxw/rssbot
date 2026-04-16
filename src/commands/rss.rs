@@ -8,16 +8,16 @@ use crate::data::Database;
 use crate::messages::{format_large_msg, Escape};
 
 use super::{
-    check_channel_permission, send_reply, update_response, Command, HandlerResult, MsgTarget,
-    ReplyText,
+    check_channel_permission, send_reply, update_response, CommandContext, HandlerResult,
+    MsgTarget, ReplyText,
 };
 
 pub async fn rss(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command>,
+    cmd: Arc<CommandContext>,
 ) -> HandlerResult {
     let chat_id = cmd.chat.id;
-    let channel = &cmd.text.value;
+    let channel = cmd.text.value.trim();
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
 

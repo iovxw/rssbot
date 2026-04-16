@@ -7,15 +7,16 @@ use crate::data::Database;
 use crate::opml::into_opml;
 
 use super::{
-    check_channel_permission, update_response, Command, HandlerResult, MsgTarget, ReplyText,
+    check_channel_permission, update_response, CommandContext, HandlerResult, MsgTarget,
+    ReplyText,
 };
 
 pub async fn export(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command>,
+    cmd: Arc<CommandContext>,
 ) -> HandlerResult {
     let chat_id = cmd.chat.id;
-    let channel = &cmd.text.value;
+    let channel = cmd.text.value.trim();
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
 

@@ -6,12 +6,13 @@ use crate::data::Database;
 use crate::messages::Escape;
 
 use super::{
-    check_channel_permission, update_response, Command, HandlerResult, MsgTarget, ReplyText,
+    check_channel_permission, update_response, CommandContext, HandlerResult, MsgTarget,
+    ReplyText,
 };
 
 pub async fn unsub(
     db: Arc<Mutex<Database>>,
-    cmd: Arc<Command>,
+    cmd: Arc<CommandContext>,
 ) -> HandlerResult {
     let chat_id = cmd.chat.id;
     let text = &cmd.text.value;

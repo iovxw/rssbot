@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use super::{update_response, Command, Database, HandlerResult, MsgTarget, ReplyText};
+use super::{update_response, CommandContext, Database, HandlerResult, MsgTarget, ReplyText};
 
 pub async fn start(
     _db: Arc<Mutex<Database>>,
-    cmd: Arc<Command>,
+    cmd: Arc<CommandContext>,
 ) -> HandlerResult {
     let target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
     let msg = tr!("start_message");

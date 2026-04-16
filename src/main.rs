@@ -18,7 +18,6 @@ use tokio::{self, sync::Mutex};
 include!(concat!(env!("OUT_DIR"), "/ctl10n_macros.rs"));
 
 mod client;
-mod command_text;
 mod commands;
 mod data;
 mod feed;
@@ -29,7 +28,6 @@ mod opml;
 
 use crate::data::Database;
 
-static BOT_NAME: OnceLock<String> = OnceLock::new();
 static BOT_ID: OnceLock<UserId> = OnceLock::new();
 
 #[derive(Debug, StructOpt)]
@@ -140,7 +138,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Cache the bot identity once so command checks and background jobs don't
     // need to call get_me again.
-    BOT_NAME.set(bot_name).unwrap();
     BOT_ID.set(me.user.id).unwrap();
 
     gardener::start_pruning(bot.clone(), db.clone());
@@ -149,20 +146,31 @@ async fn main() -> anyhow::Result<()> {
     let opt = Arc::new(opt);
 
     let handler = dptree::entry()
-        // Channel commands arrive as channel posts, but they share the same
-        // command handling path as private and group messages.
-        .branch(Update::filter_message().endpoint(
-            |bot: Bot, msg: Message, opt: Arc<crate::Opt>, db: Arc<Mutex<Database>>| async move {
-                commands::handle_message(bot, msg, opt, db).await;
+        .branch(Update::filter_message().filter_command::<commands::BotCommand>().endpoint(
+            |bot: Bot,
+             msg: Message,
+             cmd: commands::BotCommand,
+             opt: Arc<crate::Opt>,
+             db: Arc<Mutex<Database>>| async move {
+                commands::handle_message(bot, msg, cmd, opt, db).await;
                 respond(())
             },
         ))
-        .branch(Update::filter_channel_post().endpoint(
-            |bot: Bot, msg: Message, opt: Arc<crate::Opt>, db: Arc<Mutex<Database>>| async move {
-                commands::handle_message(bot, msg, opt, db).await;
-                respond(())
-            },
-        ));
+        .branch(
+            Update::filter_channel_post()
+                .filter_command::<commands::BotCommand>()
+                .endpoint(
+                    |bot: Bot,
+                     msg: Message,
+                     cmd: commands::BotCommand,
+                     opt: Arc<crate::Opt>,
+                     db: Arc<Mutex<Database>>| async move {
+                        commands::handle_message(bot, msg, cmd, opt, db).await;
+                        respond(())
+                    },
+                ),
+        )
+        ;
 
     Dispatcher::builder(bot, handler)
         .dependencies(dptree::deps![opt, db])

@@ -4,6 +4,7 @@ use teloxide::{
     prelude::*,
     sugar::request::{RequestLinkPreviewExt as _, RequestReplyExt as _},
     types::{Chat, MessageId, ParseMode, Recipient, User},
+    utils::command::BotCommands,
     RequestError,
 };
 use tokio::sync::Mutex;
@@ -16,13 +17,46 @@ mod start;
 mod sub;
 mod unsub;
 
+#[derive(BotCommands, Clone, Debug, PartialEq, Eq)]
+#[command(rename_rule = "lowercase")]
+pub(crate) enum BotCommand {
+    Start,
+    Rss(String),
+    Sub(String),
+    Unsub(String),
+    Export(String),
+}
+
+impl BotCommand {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Rss(_) => "rss",
+            Self::Sub(_) => "sub",
+            Self::Unsub(_) => "unsub",
+            Self::Export(_) => "export",
+        }
+    }
+
+    fn args(&self) -> &str {
+        match self {
+            Self::Start => "",
+            Self::Rss(args)
+            | Self::Sub(args)
+            | Self::Unsub(args)
+            | Self::Export(args) => args,
+        }
+    }
+}
+
 pub async fn handle_message(
     bot: Bot,
     msg: Message,
+    cmd: BotCommand,
     opt: Arc<crate::Opt>,
     db: Arc<Mutex<Database>>,
 ) {
-    if let Err(err) = dispatch_command(bot, msg, opt, db).await {
+    if let Err(err) = dispatch_command(bot, msg, cmd, opt, db).await {
         crate::print_error(err);
     }
 }
@@ -30,43 +64,29 @@ pub async fn handle_message(
 async fn dispatch_command(
     bot: Bot,
     msg: Message,
+    cmd: BotCommand,
     opt: Arc<crate::Opt>,
     db: Arc<Mutex<Database>>,
 ) -> HandlerResult {
-    let Some(text) = msg.text().map(str::to_owned) else {
-        return Ok(());
-    };
-
-    let bot_username = crate::BOT_NAME.get().map(String::as_str);
-    let Some((command, args)) = ["start", "rss", "sub", "unsub", "export"]
-        .into_iter()
-        .find_map(|command| {
-            crate::command_text::parse_matching_command(&text, command, bot_username)
-                .map(|args| (command, args))
-        })
-    else {
-        return Ok(());
-    };
-
-    let cmd = Arc::new(Command::from_message(bot, msg, command, args));
+    let cmd = Arc::new(CommandContext::from_message(bot, msg, &cmd));
     if !check_command(&opt, &cmd).await {
         return Ok(());
     }
 
-    match command {
+    match cmd.command.as_str() {
         "start" => start::start(db, cmd).await,
         "rss" => rss::rss(db, cmd).await,
         "sub" => sub::sub(db, cmd).await,
         "unsub" => unsub::unsub(db, cmd).await,
         "export" => export::export(db, cmd).await,
-        _ => Ok(()),
+        _ => unreachable!("unsupported command routed by BotCommand"),
     }
 }
 
 pub(super) type HandlerResult = Result<(), RequestError>;
 
 #[derive(Debug, Clone)]
-pub(super) struct Command {
+pub(super) struct CommandContext {
     pub(super) bot: Bot,
     pub(super) chat: Chat,
     pub(super) from: Option<MessageFrom>,
@@ -75,8 +95,8 @@ pub(super) struct Command {
     pub(super) command: String,
 }
 
-impl Command {
-    fn from_message(bot: Bot, msg: Message, command: &str, args: &str) -> Self {
+impl CommandContext {
+    fn from_message(bot: Bot, msg: Message, command: &BotCommand) -> Self {
         // Preserve the old tbot behavior where channel-signed messages are
         // treated as coming from sender_chat instead of an optional user.
         let from = msg
@@ -91,9 +111,9 @@ impl Command {
             from,
             message_id: msg.id,
             text: CommandText {
-                value: args.to_owned(),
+                value: command.args().to_owned(),
             },
-            command: command.to_owned(),
+            command: command.name().to_owned(),
         }
     }
 }
@@ -142,7 +162,7 @@ impl ReplyText {
     }
 }
 
-pub async fn check_command(opt: &crate::Opt, cmd: &Command) -> bool {
+pub async fn check_command(opt: &crate::Opt, cmd: &CommandContext) -> bool {
     let reply_target = &mut MsgTarget::new(cmd.chat.id, cmd.message_id);
 
     // Private mode
@@ -177,7 +197,7 @@ pub async fn check_command(opt: &crate::Opt, cmd: &Command) -> bool {
     true
 }
 
-fn is_from_bot_admin(cmd: &Command, admins: &[i64]) -> bool {
+fn is_from_bot_admin(cmd: &CommandContext, admins: &[i64]) -> bool {
     match &cmd.from {
         Some(from) => {
             let id = match from {
@@ -190,7 +210,7 @@ fn is_from_bot_admin(cmd: &Command, admins: &[i64]) -> bool {
     }
 }
 
-async fn is_from_chat_admin(cmd: &Command) -> bool {
+async fn is_from_chat_admin(cmd: &CommandContext) -> bool {
     match &cmd.from {
         Some(MessageFrom::User(user)) => {
             let user_id = user.id;
@@ -303,7 +323,7 @@ fn request_error_description(err: &RequestError) -> String {
 }
 
 pub(super) async fn check_channel_permission(
-    cmd: &Command,
+    cmd: &CommandContext,
     channel: &str,
     target: &mut MsgTarget,
 ) -> Result<Option<ChatId>, RequestError> {
@@ -386,4 +406,26 @@ pub(super) async fn check_channel_permission(
         return Ok(None);
     }
     Ok(Some(chat.id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BotCommand;
+    use teloxide::utils::command::BotCommands as _;
+
+    #[test]
+    fn native_parser_accepts_case_insensitive_mentions() {
+        assert_eq!(
+            BotCommand::parse("/sub@RSSBOT https://example.com/rss.xml", "rssbot").unwrap(),
+            BotCommand::Sub("https://example.com/rss.xml".to_owned())
+        );
+    }
+
+    #[test]
+    fn native_parser_preserves_leading_argument_whitespace() {
+        assert_eq!(
+            BotCommand::parse("/rss   @example_channel", "rssbot").unwrap(),
+            BotCommand::Rss("  @example_channel".to_owned())
+        );
+    }
 }
