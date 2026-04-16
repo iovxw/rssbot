@@ -77,6 +77,8 @@ pub(super) struct Command {
 
 impl Command {
     fn from_message(bot: Bot, msg: Message, command: &str, args: &str) -> Self {
+        // Preserve the old tbot behavior where channel-signed messages are
+        // treated as coming from sender_chat instead of an optional user.
         let from = msg
             .sender_chat
             .clone()
@@ -158,6 +160,7 @@ pub async fn check_command(opt: &crate::Opt, cmd: &Command) -> bool {
         return false;
     }
 
+    // Restrict mode: bot commands are only accessible to admins.
     if opt.restricted && (cmd.chat.is_group() || cmd.chat.is_supergroup()) {
         let user_is_admin = is_from_chat_admin(cmd).await;
         if !user_is_admin {
@@ -228,6 +231,8 @@ pub(super) async fn update_response(
     target: &mut MsgTarget,
     message: ReplyText,
 ) -> HandlerResult {
+    // Keep a single status message per command: reply once, then edit it as the
+    // command progresses.
     let msg = if target.first_time {
         send_reply(bot, target.chat_id, target.message_id, message).await?
     } else {

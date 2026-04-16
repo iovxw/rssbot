@@ -138,6 +138,8 @@ async fn main() -> anyhow::Result<()> {
         parse_human_size(&opt.max_feed_size).context("Invalid max_feed_size")?,
     );
 
+    // Cache the bot identity once so command checks and background jobs don't
+    // need to call get_me again.
     BOT_NAME.set(bot_name).unwrap();
     BOT_ID.set(me.user.id).unwrap();
 
@@ -147,6 +149,8 @@ async fn main() -> anyhow::Result<()> {
     let opt = Arc::new(opt);
 
     let handler = dptree::entry()
+        // Channel commands arrive as channel posts, but they share the same
+        // command handling path as private and group messages.
         .branch(Update::filter_message().endpoint(
             |bot: Bot, msg: Message, opt: Arc<crate::Opt>, db: Arc<Mutex<Database>>| async move {
                 commands::handle_message(bot, msg, opt, db).await;
