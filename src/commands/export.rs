@@ -7,8 +7,8 @@ use crate::data::Database;
 use crate::opml::into_opml;
 
 use super::{
-    check_channel_permission, update_response, CommandContext, HandlerResult, MsgTarget,
-    ReplyText,
+    check_channel_permission, update_response, BotCommand, CommandContext, HandlerResult,
+    MsgTarget, ReplyText,
 };
 
 pub async fn export(
@@ -16,7 +16,10 @@ pub async fn export(
     cmd: Arc<CommandContext>,
 ) -> HandlerResult {
     let chat_id = cmd.chat.id;
-    let channel = cmd.text.value.trim();
+    let channel = match &cmd.command {
+        BotCommand::Export(channel) => channel.trim(),
+        _ => unreachable!("export handler must receive BotCommand::Export"),
+    };
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
 

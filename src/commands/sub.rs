@@ -7,8 +7,8 @@ use crate::data::Database;
 use crate::messages::Escape;
 
 use super::{
-    check_channel_permission, update_response, CommandContext, HandlerResult, MsgTarget,
-    ReplyText,
+    check_channel_permission, update_response, BotCommand, CommandContext, HandlerResult,
+    MsgTarget, ReplyText,
 };
 
 pub async fn sub(
@@ -16,8 +16,10 @@ pub async fn sub(
     cmd: Arc<CommandContext>,
 ) -> HandlerResult {
     let chat_id = cmd.chat.id;
-    let text = &cmd.text.value;
-    let args = text.split_whitespace().collect::<Vec<_>>();
+    let args = match &cmd.command {
+        BotCommand::Sub(text) => text.split_whitespace().collect::<Vec<_>>(),
+        _ => unreachable!("sub handler must receive BotCommand::Sub"),
+    };
     let mut target_id = chat_id;
     let target = &mut MsgTarget::new(chat_id, cmd.message_id);
     let feed_url;

@@ -27,28 +27,6 @@ pub(crate) enum BotCommand {
     Export(String),
 }
 
-impl BotCommand {
-    fn name(&self) -> &'static str {
-        match self {
-            Self::Start => "start",
-            Self::Rss(_) => "rss",
-            Self::Sub(_) => "sub",
-            Self::Unsub(_) => "unsub",
-            Self::Export(_) => "export",
-        }
-    }
-
-    fn args(&self) -> &str {
-        match self {
-            Self::Start => "",
-            Self::Rss(args)
-            | Self::Sub(args)
-            | Self::Unsub(args)
-            | Self::Export(args) => args,
-        }
-    }
-}
-
 pub async fn handle_message(
     bot: Bot,
     msg: Message,
@@ -68,18 +46,17 @@ async fn dispatch_command(
     opt: Arc<crate::Opt>,
     db: Arc<Mutex<Database>>,
 ) -> HandlerResult {
-    let cmd = Arc::new(CommandContext::from_message(bot, msg, &cmd));
+    let cmd = Arc::new(CommandContext::from_message(bot, msg, cmd));
     if !check_command(&opt, &cmd).await {
         return Ok(());
     }
 
-    match cmd.command.as_str() {
-        "start" => start::start(db, cmd).await,
-        "rss" => rss::rss(db, cmd).await,
-        "sub" => sub::sub(db, cmd).await,
-        "unsub" => unsub::unsub(db, cmd).await,
-        "export" => export::export(db, cmd).await,
-        _ => unreachable!("unsupported command routed by BotCommand"),
+    match cmd.command.clone() {
+        BotCommand::Start => start::start(db, cmd).await,
+        BotCommand::Rss(_) => rss::rss(db, cmd).await,
+        BotCommand::Sub(_) => sub::sub(db, cmd).await,
+        BotCommand::Unsub(_) => unsub::unsub(db, cmd).await,
+        BotCommand::Export(_) => export::export(db, cmd).await,
     }
 }
 
@@ -91,12 +68,11 @@ pub(super) struct CommandContext {
     pub(super) chat: Chat,
     pub(super) from: Option<MessageFrom>,
     pub(super) message_id: MessageId,
-    pub(super) text: CommandText,
-    pub(super) command: String,
+    pub(super) command: BotCommand,
 }
 
 impl CommandContext {
-    fn from_message(bot: Bot, msg: Message, command: &BotCommand) -> Self {
+    fn from_message(bot: Bot, msg: Message, command: BotCommand) -> Self {
         // Preserve the old tbot behavior where channel-signed messages are
         // treated as coming from sender_chat instead of an optional user.
         let from = msg
@@ -110,17 +86,9 @@ impl CommandContext {
             chat: msg.chat.clone(),
             from,
             message_id: msg.id,
-            text: CommandText {
-                value: command.args().to_owned(),
-            },
-            command: command.name().to_owned(),
+            command,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct CommandText {
-    pub(super) value: String,
 }
 
 #[derive(Debug, Clone)]
@@ -155,8 +123,8 @@ pub async fn check_command(opt: &crate::Opt, cmd: &CommandContext) -> bool {
     // Private mode
     if !opt.admin.is_empty() && !is_from_bot_admin(cmd, &opt.admin) {
         eprintln!(
-            "Unauthenticated request from user/channel: {:?}, command: {}, args: {}",
-            cmd.from, cmd.command, cmd.text.value
+            "Unauthenticated request from user/channel: {:?}, command: {:?}",
+            cmd.from, cmd.command
         );
         return false;
     }
