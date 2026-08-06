@@ -1,6 +1,6 @@
 rss_size_limit_exceeded = "RSS size limit exceeded （{size}）"
-continuous_fetch_error = "《<a href=\"{link}\">{title}</a>》has been pulled unsuccessfully for 5 consecutive days ({error}). It may have been closed, please unsubscribe."
-feed_renamed = "<a href=\"{link}\">{title}</a> has been renamed to {new_title}"
+continuous_fetch_error = "《{title}》has been pulled unsuccessfully for 5 consecutive days ({error}). It may have been closed, please unsubscribe."
+feed_renamed = "{title} has been renamed to {new_title}"
 network_error = "Network error （{source}）"
 parsing_error = "Parsing error （{source}）"
 commands_in_private_channel = "Please use commands in private chat to manage subscriptions for the channel"

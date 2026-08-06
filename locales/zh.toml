@@ -1,6 +1,6 @@
 rss_size_limit_exceeded = "RSS 超出大小限制（{size}）"
-continuous_fetch_error = "《<a href=\"{link}\">{title}</a>》已经连续 5 天拉取出错 ({error}), 可能已经关闭, 请取消订阅"
-feed_renamed = "<a href=\"{link}\">{title}</a> 已更名为 {new_title}"
+continuous_fetch_error = "《{title}》已经连续 5 天拉取出错 ({error}), 可能已经关闭, 请取消订阅"
+feed_renamed = "{title} 已更名为 {new_title}"
 network_error = "网络错误（{source}）"
 parsing_error = "解析错误（{source}）"
 commands_in_private_channel = "请在私聊中使用命令为频道管理订阅"

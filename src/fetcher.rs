@@ -76,7 +76,6 @@ async fn fetch_and_push_updates(
                 db.lock().await.reset_down_time(&feed.link);
                 let msg = tr!(
                     "continuous_fetch_error",
-                    link = Escape(&feed.link),
                     title = Escape(&feed.title),
                     error = Escape(&e.to_user_friendly())
                 );
@@ -115,7 +114,6 @@ async fn fetch_and_push_updates(
             FeedUpdate::Title(new_title) => {
                 let msg = tr!(
                     "feed_renamed",
-                    link = Escape(&feed.link),
                     title = Escape(&feed.title),
                     new_title = Escape(&new_title)
                 );
